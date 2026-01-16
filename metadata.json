@@ -1,0 +1,9 @@
+{
+  "name": "Cayr",
+  "description": "Cayr is a modern healthcare management platform for patients and doctors.",
+  "requestFramePermissions": [
+    "camera",
+    "microphone",
+    "geolocation"
+  ]
+}
