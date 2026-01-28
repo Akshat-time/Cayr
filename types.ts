@@ -32,6 +32,14 @@ export enum PatientStatus {
   RISK = 'RISK'
 }
 
+export interface PainArea {
+  id: string;
+  label: string;
+  intensity: number;
+  notes?: string;
+  side: 'Front' | 'Back';
+}
+
 export interface Notification {
   id: string;
   type: NotificationType;
@@ -72,6 +80,7 @@ export interface ClinicalEntry {
   observations: string;
   treatment: string;
   recommendations: string;
+  painMap?: PainArea[];
 }
 
 export interface TestResult {
@@ -105,6 +114,7 @@ export interface MedicalReport {
     weight: number;
     age: number;
   };
+  painMap?: PainArea[];
 }
 
 export interface Prescription {
@@ -151,6 +161,7 @@ export interface PatientRecord {
   clinicalEntries?: ClinicalEntry[];
   testResults?: TestResult[];
   documents?: { id: string; name: string; type: string; date: string; uploadedBy: string }[];
+  activePainMap?: PainArea[];
 }
 
 export interface User {
@@ -173,6 +184,7 @@ export interface User {
     zip?: string;
     country?: string;
   };
+  preferredLanguage?: string;
   height?: number;
   weight?: number;
   bloodType?: string;

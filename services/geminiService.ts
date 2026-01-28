@@ -1,37 +1,49 @@
 
-import { GoogleGenAI } from "@google/genai";
+import { GoogleGenAI, Modality, LiveServerMessage } from "@google/genai";
 
-const INTAKE_SYSTEM_INSTRUCTION = `You are "Cayr Assistant", a professional clinical intake specialist. 
-Your goal is to assist doctors by gathering detailed information from patients before their consultation.
+const INTAKE_SYSTEM_INSTRUCTION = `You are "Cayr Clinical Scribe", a professional medical intake specialist. 
+Your objective is to gather precise clinical data from patients to prepare a SOAP (Subjective, Objective, Assessment, Plan) draft for the doctor.
 
-Follow this workflow:
-1. Acknowledge the patient's concern with empathy.
-2. Ask one follow-up question at a time.
-3. You MUST cover these specific areas:
-   - Detailed description of the current problem/symptoms.
-   - Current medications (including supplements).
-   - Previous health conditions or surgeries.
-   - Known deficiencies (vitamins, etc.).
-   - Recent BP or Sugar readings (if the patient knows them).
-   - Lifestyle factors (sleep, stress, exercise) if relevant.
+PROTOCOL:
+1. Empathize briefly: "I understand that must be difficult."
+2. Questioning: Ask exactly one follow-up question per turn to maintain clarity.
+3. MANDATORY DATA POINTS:
+   - Chief Complaint (Onset, Duration, Character).
+   - Relevant Medications & Dosages.
+   - Known Chronic Conditions/Surgeries.
+   - Nutritional/Vitamin Deficiencies.
+   - Most recent Vitals (if available).
 
-Tone: Clinical, professional, empathetic, and concise. 
-Format: Avoid long paragraphs. Use clear, single questions.
+TONE: Professional, succinct, clinical.
+FORMATTING: Use bold for clinical terms.
+FINAL TRIGGER: Once info is gathered, say: "Clinical intake protocol complete. Summary is ready for physician review."`;
 
-Final Task: When you have sufficient information (at least 4-5 key areas covered), provide a very brief summary and say: "I have gathered the clinical details. Your pre-consultation report is ready for the doctor."`;
+const SYMPTOM_CHECKER_INSTRUCTION = `You are the "Cayr AI Triage Bot". 
+Your goal is to perform a high-level symptom assessment and provide risk-stratified guidance.
 
-const SYMPTOM_CHECKER_INSTRUCTION = `You are the "Cayr Symptom Checker". 
-Your role is to help patients evaluate their symptoms and provide guidance on the next steps.
+CRITICAL SAFETY RULES:
+1. DISCLAIMER: Always start with "I am an AI, not a doctor. This is for informational triage only."
+2. RED FLAGS: If patient reports chest pain, severe SOB, unilateral weakness, or severe hemorrhage, STOP and instruct: "CALL EMERGENCY SERVICES (911) IMMEDIATELY."
+3. TRIAGE LEVELS:
+   - EMERGENT: Immediate ER.
+   - URGENT: Same-day clinic.
+   - ROUTINE: Standard booking.
+   - SELF-CARE: Over-the-counter/rest.
 
-IMPORTANT RULES:
-1. You ARE NOT a doctor. Always state a disclaimer that this is not a diagnosis.
-2. Ask one question at a time to clarify the severity, duration, and nature of symptoms.
-3. If red flags are detected (chest pain, severe difficulty breathing, sudden weakness), immediately advise seeking emergency care.
-4. After 3-4 questions, provide:
-   - "Potential Considerations": A bulleted list of common conditions matching the symptoms.
-   - "Triage Recommendation": Clear advice (e.g., "Self-care", "Book a standard appointment", "Visit Urgent Care", or "Go to Emergency").
+Ask one clarifying question at a time. After 3 questions, provide a "Risk Assessment" and "Next Steps".`;
 
-Tone: Calm, professional, and cautious.`;
+const VOICE_BRIDGE_INSTRUCTION = `You are the "Cayr Indian Medical Interpreter". 
+A high-accuracy real-time bridge for Indian clinics.
+
+LANGUAGES: Hindi, Tamil, Telugu, Marathi, Bengali, Kannada, Malayalam, Gujarati, Punjabi.
+
+MISSION:
+- Translate patient's local language into Clinical English for the doctor.
+- Translate doctor's Clinical English into the patient's local language.
+- Maintain professional medical terminology and neutral tone.
+- Do not add interpretation; only perform translation.
+
+Output should be strictly the translation unless a summary is requested.`;
 
 export const createClinicalIntakeSession = () => {
   const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
@@ -39,7 +51,7 @@ export const createClinicalIntakeSession = () => {
     model: 'gemini-3-flash-preview',
     config: {
       systemInstruction: INTAKE_SYSTEM_INSTRUCTION,
-      temperature: 0.7,
+      temperature: 0.2,
     },
   });
 };
@@ -50,17 +62,51 @@ export const createSymptomCheckerSession = () => {
     model: 'gemini-3-flash-preview',
     config: {
       systemInstruction: SYMPTOM_CHECKER_INSTRUCTION,
-      temperature: 0.5,
+      temperature: 0.2,
+    },
+  });
+};
+
+export const createGeneralAISession = () => {
+  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+  return ai.chats.create({
+    model: 'gemini-3-pro-preview',
+    config: {
+      systemInstruction: "You are Cayr AI, a specialized medical software assistant. Help doctors with clinical logic and patients with health literacy.",
+      temperature: 0.7,
+      thinkingConfig: { thinkingBudget: 0 }
+    },
+  });
+};
+
+export const connectVoiceBridge = (callbacks: {
+  onopen?: () => void;
+  onmessage?: (msg: LiveServerMessage) => void;
+  onerror?: (e: any) => void;
+  onclose?: (e: any) => void;
+}) => {
+  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+  return ai.live.connect({
+    model: 'gemini-2.5-flash-native-audio-preview-12-2025',
+    callbacks,
+    config: {
+      responseModalities: [Modality.AUDIO],
+      speechConfig: {
+        voiceConfig: { prebuiltVoiceConfig: { voiceName: 'Kore' } },
+      },
+      systemInstruction: VOICE_BRIDGE_INSTRUCTION,
+      inputAudioTranscription: {},
+      outputAudioTranscription: {},
     },
   });
 };
 
 export const searchNearbyClinics = async (lat: number, lng: number, category: string = "medical clinics") => {
   const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-  // Category-specific prompt engineering for better Maps results
-  const prompt = `Find 6 top-rated ${category} near these coordinates. 
-  For each venue, provide a very brief clinical context (e.g., "Specializes in pediatrics", "24-hour emergency diagnostics").
-  Return the results as a helpful summary.`;
+  
+  const prompt = `Find 5 top-rated ${category} near ${lat}, ${lng}. 
+  Return a structured list. For each, describe their main medical service.
+  Use Google Maps grounding for accuracy.`;
 
   const response = await ai.models.generateContent({
     model: "gemini-2.5-flash",
@@ -69,10 +115,7 @@ export const searchNearbyClinics = async (lat: number, lng: number, category: st
       tools: [{ googleMaps: {} }],
       toolConfig: {
         retrievalConfig: {
-          latLng: {
-            latitude: lat,
-            longitude: lng
-          }
+          latLng: { latitude: lat, longitude: lng }
         }
       }
     },
@@ -84,22 +127,22 @@ export const searchNearbyClinics = async (lat: number, lng: number, category: st
   };
 };
 
-export const extractClinicalSummary = async (chatHistory: string) => {
+export const generateSOAPNote = async (chatHistory: string) => {
   const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
   try {
     const response = await ai.models.generateContent({
-      model: 'gemini-3-flash-preview',
-      contents: `You are a clinical summarizer for Cayr. Extract critical data from this patient conversation.
-      Focus on: Concern, Medications, Deficiencies, Vitals, Chronic Conditions.
-      Formatting: Use clear bullet points. State "None reported" if missing.
+      model: 'gemini-3-pro-preview',
+      contents: `Transform this patient intake conversation into a professional SOAP medical note.
       
       Chat History:
       ${chatHistory}`,
-      config: { temperature: 0.1 }
+      config: {
+        temperature: 0.1,
+        systemInstruction: "You are a senior medical resident. Generate a clean, structured SOAP note for clinical records."
+      }
     });
-    return response.text || "Summary generation failed.";
+    return response.text || "Summary failed.";
   } catch (error) {
-    console.error("Extraction Error:", error);
-    return "Could not process clinical summary.";
+    return "Clinical summary currently unavailable.";
   }
 };

@@ -2,6 +2,7 @@
 import React from 'react';
 import { User, UserRole, Appointment, AppointmentStatus, Notification } from '../types';
 import NotificationBell from './NotificationBell';
+import AIAssistant from './AIAssistant';
 
 interface LayoutProps {
   user: User | null;
@@ -154,6 +155,8 @@ const Layout: React.FC<LayoutProps> = ({
 
         <main className="flex-1 overflow-y-auto p-10 relative bg-[#f4f7fe]" id="main-content" role="main">
           {children}
+          {/* Global AI Assistant */}
+          <AIAssistant />
         </main>
       </div>
     </div>
