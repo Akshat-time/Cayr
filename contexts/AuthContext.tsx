@@ -6,44 +6,50 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<User | null>(null);
-  const [token, setToken] = useState<string | null>(localStorage.getItem('cayr_token'));
   const [isLoading, setIsLoading] = useState(true);
 
-  // Initialize from local storage on mount
-  useEffect(() => {
-    const savedUser = localStorage.getItem('cayr_user');
-    const savedToken = localStorage.getItem('cayr_token');
-    
-    if (savedToken && savedUser) {
-      try {
-        setUser(JSON.parse(savedUser));
-        setToken(savedToken);
-      } catch (e) {
-        console.error("Failed to parse saved session", e);
-        localStorage.clear();
+  // Check auth status on mount
+  const checkAuth = useCallback(async () => {
+    try {
+      const res = await fetch('/api/auth/me'); // Cookie sent automatically
+
+      if (res.ok) {
+        const userData = await res.json();
+        setUser(userData);
+      } else {
+        setUser(null);
       }
+    } catch (err) {
+      console.error('Auth verification failed', err);
+      setUser(null);
+    } finally {
+      setIsLoading(false);
     }
-    setIsLoading(false);
   }, []);
 
-  const login = useCallback((newToken: string, userData: User) => {
-    localStorage.setItem('cayr_token', newToken);
-    localStorage.setItem('cayr_user', JSON.stringify(userData));
-    setToken(newToken);
+  useEffect(() => {
+    checkAuth();
+  }, [checkAuth]);
+
+  const login = useCallback((userData: User) => {
     setUser(userData);
-    setIsLoading(false);
   }, []);
 
-  const logout = useCallback(() => {
-    localStorage.removeItem('cayr_token');
-    localStorage.removeItem('cayr_user');
-    setToken(null);
-    setUser(null);
-    setIsLoading(false);
+  const logout = useCallback(async () => {
+    try {
+      await fetch('/api/auth/logout', { method: 'POST' });
+    } catch (error) {
+      console.error('Logout failed', error);
+    } finally {
+      setUser(null);
+      // Optional: Clear legacy items just in case
+      localStorage.removeItem('cayr_token');
+      localStorage.removeItem('cayr_user');
+    }
   }, []);
 
   return (
-    <AuthContext.Provider value={{ user, token, isLoading, login, logout }}>
+    <AuthContext.Provider value={{ user, isLoading, login, logout }}>
       {children}
     </AuthContext.Provider>
   );

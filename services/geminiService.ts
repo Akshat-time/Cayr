@@ -48,7 +48,7 @@ Output should be strictly the translation unless a summary is requested.`;
 export const createClinicalIntakeSession = () => {
   const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
   return ai.chats.create({
-    model: 'gemini-3-flash-preview',
+    model: 'gemini-2.0-flash-exp',
     config: {
       systemInstruction: INTAKE_SYSTEM_INSTRUCTION,
       temperature: 0.2,
@@ -59,7 +59,7 @@ export const createClinicalIntakeSession = () => {
 export const createSymptomCheckerSession = () => {
   const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
   return ai.chats.create({
-    model: 'gemini-3-flash-preview',
+    model: 'gemini-2.0-flash-exp',
     config: {
       systemInstruction: SYMPTOM_CHECKER_INSTRUCTION,
       temperature: 0.2,
@@ -70,7 +70,7 @@ export const createSymptomCheckerSession = () => {
 export const createGeneralAISession = () => {
   const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
   return ai.chats.create({
-    model: 'gemini-3-pro-preview',
+    model: 'gemini-2.0-flash-exp',
     config: {
       systemInstruction: "You are Cayr AI, a specialized medical software assistant. Help doctors with clinical logic and patients with health literacy.",
       temperature: 0.7,
@@ -81,13 +81,13 @@ export const createGeneralAISession = () => {
 
 export const connectVoiceBridge = (callbacks: {
   onopen?: () => void;
-  onmessage?: (msg: LiveServerMessage) => void;
+  onmessage: (msg: LiveServerMessage) => void;
   onerror?: (e: any) => void;
   onclose?: (e: any) => void;
 }) => {
   const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
   return ai.live.connect({
-    model: 'gemini-2.5-flash-native-audio-preview-12-2025',
+    model: 'gemini-2.0-flash-exp',
     callbacks,
     config: {
       responseModalities: [Modality.AUDIO],
@@ -103,13 +103,13 @@ export const connectVoiceBridge = (callbacks: {
 
 export const searchNearbyClinics = async (lat: number, lng: number, category: string = "medical clinics") => {
   const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-  
+
   const prompt = `Find 5 top-rated ${category} near ${lat}, ${lng}. 
   Return a structured list. For each, describe their main medical service.
   Use Google Maps grounding for accuracy.`;
 
   const response = await ai.models.generateContent({
-    model: "gemini-2.5-flash",
+    model: "gemini-2.0-flash-exp",
     contents: prompt,
     config: {
       tools: [{ googleMaps: {} }],
@@ -131,7 +131,7 @@ export const generateSOAPNote = async (chatHistory: string) => {
   const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
   try {
     const response = await ai.models.generateContent({
-      model: 'gemini-3-pro-preview',
+      model: 'gemini-2.0-flash-exp',
       contents: `Transform this patient intake conversation into a professional SOAP medical note.
       
       Chat History:

@@ -2,25 +2,26 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { User, Appointment, AppointmentStatus, MedicalReport, Prescription, Payment, PainArea } from '../types';
 import { MOCK_DOCTORS } from '../constants';
-import { 
-  createClinicalIntakeSession, 
-  createSymptomCheckerSession, 
-  generateSOAPNote, 
-  searchNearbyClinics 
+import {
+  createClinicalIntakeSession,
+  createSymptomCheckerSession,
+  generateSOAPNote,
+  searchNearbyClinics
 } from '../services/geminiService';
-import { 
-  XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, 
+import {
+  XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
   AreaChart, Area
 } from 'recharts';
 import MultilingualBridge from './MultilingualBridge';
 import BodyScanner from './BodyScanner';
+import Pharmacy from './Pharmacy';
 
 interface ChatMessage { role: 'user' | 'ai'; text: string; }
-interface LiveFacility { 
-  name: string; 
-  uri: string; 
-  type: string; 
-  address?: string; 
+interface LiveFacility {
+  name: string;
+  uri: string;
+  type: string;
+  address?: string;
   clinicalContext?: string;
   latOffset?: number;
   lngOffset?: number;
@@ -35,11 +36,11 @@ interface PatientDashboardProps {
   onBook: (doctorId: string, doctorName: string, date: string, time: string) => void;
   onAddReport: (report: MedicalReport) => void;
   onUploadPrescription: (prescription: Prescription) => void;
-  view: 'dashboard' | 'analytics' | 'payments' | 'reports' | 'reminders' | 'facilities' | 'booking';
+  view: 'dashboard' | 'analytics' | 'payments' | 'reports' | 'reminders' | 'facilities' | 'booking' | 'pharmacy';
   onSubViewChange?: (view: string) => void;
 }
 
-const PatientDashboard: React.FC<PatientDashboardProps> = ({ 
+const PatientDashboard: React.FC<PatientDashboardProps> = ({
   user, appointments, medicalReports, prescriptions, payments, onBook, onAddReport, view: initialView = 'dashboard', onSubViewChange
 }) => {
   const [activeTab, setActiveTab] = useState(initialView);
@@ -56,12 +57,12 @@ const PatientDashboard: React.FC<PatientDashboardProps> = ({
     const saved = sessionStorage.getItem('cayr_pain_map');
     return saved ? JSON.parse(saved) : [];
   });
-  
+
   const [liveFacilities, setLiveFacilities] = useState<LiveFacility[]>([]);
   const [isSearchingFacilities, setIsSearchingFacilities] = useState(false);
   const [facilityCategory, setFacilityCategory] = useState('Clinics');
-  const [userLocation, setUserLocation] = useState<{lat: number, lng: number} | null>(null);
-  
+  const [userLocation, setUserLocation] = useState<{ lat: number, lng: number } | null>(null);
+
   const [selectedDoctorId, setSelectedDoctorId] = useState<string | null>(null);
   const [bookingDate, setBookingDate] = useState('');
   const [bookingTime, setBookingTime] = useState('');
@@ -101,7 +102,7 @@ const PatientDashboard: React.FC<PatientDashboardProps> = ({
     navigator.geolocation.getCurrentPosition(async (pos) => {
       const { latitude, longitude } = pos.coords;
       setUserLocation({ lat: latitude, lng: longitude });
-      
+
       try {
         const result = await searchNearbyClinics(latitude, longitude, categoryQuery);
         // Process Gemini grounding chunks into usable facility objects
@@ -158,10 +159,10 @@ const PatientDashboard: React.FC<PatientDashboardProps> = ({
   const handleCreateReport = async () => {
     setIsGeneratingReport(true);
     const history = chatHistory.map(m => `${m.role}: ${m.text}`).join('\n');
-    const painContext = activePainMap.length > 0 
+    const painContext = activePainMap.length > 0
       ? `\nPain Map Data: ${activePainMap.map(a => `${a.label} (${a.side}) intensity ${a.intensity}/10`).join(', ')}`
       : "";
-      
+
     const summary = await generateSOAPNote(history + painContext);
     const report: MedicalReport = {
       id: `SOAP-${Date.now()}`,
@@ -186,22 +187,22 @@ const PatientDashboard: React.FC<PatientDashboardProps> = ({
       {/* Active Pain Alert */}
       {activePainMap.length > 0 && (
         <div className="bg-rose-50 border border-rose-100 p-8 rounded-[40px] flex flex-col md:flex-row items-center justify-between gap-6 animate-in slide-in-from-top-4">
-           <div className="flex items-center space-x-6">
-              <div className="w-14 h-14 bg-rose-500 text-white rounded-2xl flex items-center justify-center text-2xl shadow-lg shadow-rose-200 animate-pulse">🌡️</div>
-              <div>
-                 <h4 className="text-lg font-black text-rose-900 tracking-tight">Active Anatomical Map Detected</h4>
-                 <p className="text-[10px] font-black uppercase tracking-widest text-rose-500 mt-1">{activePainMap.length} Areas of high intensity reported. AI Intake recommended.</p>
-              </div>
-           </div>
-           <div className="flex items-center space-x-4">
-              <button 
-                onClick={() => { setChatType('intake'); setChatHistory([{ role: 'ai', text: `I've analyzed your body scan. You reported intensity at ${activePainMap.map(a => a.label).join(', ')}. When did these sensations begin?` }]); chatSessionRef.current = createClinicalIntakeSession(); setIsChatOpen(true); }}
-                className="px-8 py-4 bg-rose-600 text-white rounded-2xl text-[10px] font-black uppercase tracking-widest hover:bg-rose-700 transition-all shadow-xl shadow-rose-200"
-              >
-                Launch AI Intake
-              </button>
-              <button onClick={() => setActivePainMap([])} className="px-6 py-4 text-[10px] font-black uppercase tracking-widest text-rose-400 hover:text-rose-600">Clear Map</button>
-           </div>
+          <div className="flex items-center space-x-6">
+            <div className="w-14 h-14 bg-rose-500 text-white rounded-2xl flex items-center justify-center text-2xl shadow-lg shadow-rose-200 animate-pulse">🌡️</div>
+            <div>
+              <h4 className="text-lg font-black text-rose-900 tracking-tight">Active Anatomical Map Detected</h4>
+              <p className="text-[10px] font-black uppercase tracking-widest text-rose-500 mt-1">{activePainMap.length} Areas of high intensity reported. AI Intake recommended.</p>
+            </div>
+          </div>
+          <div className="flex items-center space-x-4">
+            <button
+              onClick={() => { setChatType('intake'); setChatHistory([{ role: 'ai', text: `I've analyzed your body scan. You reported intensity at ${activePainMap.map(a => a.label).join(', ')}. When did these sensations begin?` }]); chatSessionRef.current = createClinicalIntakeSession(); setIsChatOpen(true); }}
+              className="px-8 py-4 bg-rose-600 text-white rounded-2xl text-[10px] font-black uppercase tracking-widest hover:bg-rose-700 transition-all shadow-xl shadow-rose-200"
+            >
+              Launch AI Intake
+            </button>
+            <button onClick={() => setActivePainMap([])} className="px-6 py-4 text-[10px] font-black uppercase tracking-widest text-rose-400 hover:text-rose-600">Clear Map</button>
+          </div>
         </div>
       )}
 
@@ -214,59 +215,59 @@ const PatientDashboard: React.FC<PatientDashboardProps> = ({
           { label: 'Interpreter', icon: '🇮🇳', color: 'bg-white border border-slate-100', sub: 'Indian Language Bridge', onClick: () => setIsBridgeOpen(true) },
         ].map((item, i) => (
           <button key={i} onClick={item.onClick} className={`p-8 rounded-[40px] ${item.color} shadow-sm text-left group transition-all hover:scale-[1.02] hover:shadow-xl`}>
-             <div className={`w-14 h-14 rounded-2xl flex items-center justify-center text-2xl mb-6 ${item.color === 'bg-indigo-600 text-white' ? 'bg-white/10' : item.color}`}>{item.icon}</div>
-             <p className="font-black text-lg tracking-tight">{item.label}</p>
-             <p className={`text-[10px] font-black uppercase tracking-widest mt-1 opacity-60`}>{item.sub}</p>
+            <div className={`w-14 h-14 rounded-2xl flex items-center justify-center text-2xl mb-6 ${item.color === 'bg-indigo-600 text-white' ? 'bg-white/10' : item.color}`}>{item.icon}</div>
+            <p className="font-black text-lg tracking-tight">{item.label}</p>
+            <p className={`text-[10px] font-black uppercase tracking-widest mt-1 opacity-60`}>{item.sub}</p>
           </button>
         ))}
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-10">
         <div className="lg:col-span-2 bg-white rounded-[48px] p-10 border border-slate-100 shadow-sm">
-           <div className="flex items-center justify-between mb-10">
-              <h3 className="text-xl font-black tracking-tight text-slate-900">Health Calibration Vitals</h3>
-              <div className="flex space-x-2">
-                 <div className="px-3 py-1 bg-blue-50 text-blue-500 rounded-lg text-[10px] font-black uppercase tracking-widest">Sys/Dia Sync</div>
-              </div>
-           </div>
-           <div className="h-72">
-              <ResponsiveContainer width="100%" height="100%">
-                 <AreaChart data={Array.from({length: 14}, (_, i) => ({ day: i+1, sys: 120 + Math.random()*20, dia: 80 + Math.random()*10 }))}>
-                    <defs>
-                      <linearGradient id="colorSys" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="5%" stopColor="#3b5bfd" stopOpacity={0.1}/>
-                        <stop offset="95%" stopColor="#3b5bfd" stopOpacity={0}/>
-                      </linearGradient>
-                    </defs>
-                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
-                    <XAxis dataKey="day" axisLine={false} tickLine={false} tick={{fontSize: 10, fontWeight: 800, fill: '#94a3b8'}} />
-                    <YAxis axisLine={false} tickLine={false} tick={{fontSize: 10, fontWeight: 800, fill: '#94a3b8'}} />
-                    <Tooltip contentStyle={{borderRadius: '20px', border: 'none', boxShadow: '0 10px 30px rgba(0,0,0,0.05)', fontWeight: 800}} />
-                    <Area type="monotone" dataKey="sys" stroke="#3b5bfd" strokeWidth={4} fillOpacity={1} fill="url(#colorSys)" />
-                    <Area type="monotone" dataKey="dia" stroke="#ff5c6c" strokeWidth={4} fillOpacity={0} />
-                 </AreaChart>
-              </ResponsiveContainer>
-           </div>
+          <div className="flex items-center justify-between mb-10">
+            <h3 className="text-xl font-black tracking-tight text-slate-900">Health Calibration Vitals</h3>
+            <div className="flex space-x-2">
+              <div className="px-3 py-1 bg-blue-50 text-blue-500 rounded-lg text-[10px] font-black uppercase tracking-widest">Sys/Dia Sync</div>
+            </div>
+          </div>
+          <div className="h-72">
+            <ResponsiveContainer width="100%" height="100%">
+              <AreaChart data={Array.from({ length: 14 }, (_, i) => ({ day: i + 1, sys: 120 + Math.random() * 20, dia: 80 + Math.random() * 10 }))}>
+                <defs>
+                  <linearGradient id="colorSys" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor="#3b5bfd" stopOpacity={0.1} />
+                    <stop offset="95%" stopColor="#3b5bfd" stopOpacity={0} />
+                  </linearGradient>
+                </defs>
+                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+                <XAxis dataKey="day" axisLine={false} tickLine={false} tick={{ fontSize: 10, fontWeight: 800, fill: '#94a3b8' }} />
+                <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 10, fontWeight: 800, fill: '#94a3b8' }} />
+                <Tooltip contentStyle={{ borderRadius: '20px', border: 'none', boxShadow: '0 10px 30px rgba(0,0,0,0.05)', fontWeight: 800 }} />
+                <Area type="monotone" dataKey="sys" stroke="#3b5bfd" strokeWidth={4} fillOpacity={1} fill="url(#colorSys)" />
+                <Area type="monotone" dataKey="dia" stroke="#ff5c6c" strokeWidth={4} fillOpacity={0} />
+              </AreaChart>
+            </ResponsiveContainer>
+          </div>
         </div>
 
         <div className="bg-white rounded-[48px] p-10 border border-slate-100 shadow-sm">
-           <h3 className="text-xl font-black tracking-tight text-slate-900 mb-8">Clinical Roadmap</h3>
-           <div className="space-y-6">
-              {appointments.filter(a => a.status !== 'CANCELLED').length === 0 ? (
-                <div className="py-20 text-center text-slate-300 font-black uppercase text-[10px] tracking-widest">No visits booked.</div>
-              ) : (
-                appointments.filter(a => a.status !== 'CANCELLED').slice(0, 3).map(app => (
-                  <div key={app.id} className="p-5 bg-slate-50/50 rounded-3xl border border-transparent hover:border-slate-200 transition-all flex items-center space-x-4">
-                     <div className="w-12 h-12 bg-white rounded-xl border border-slate-100 flex items-center justify-center text-lg shadow-sm">🩺</div>
-                     <div className="flex-1">
-                        <p className="text-sm font-black text-slate-800">{app.doctorName}</p>
-                        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-1">{app.date} • {app.time}</p>
-                     </div>
+          <h3 className="text-xl font-black tracking-tight text-slate-900 mb-8">Clinical Roadmap</h3>
+          <div className="space-y-6">
+            {appointments.filter(a => a.status !== 'CANCELLED').length === 0 ? (
+              <div className="py-20 text-center text-slate-300 font-black uppercase text-[10px] tracking-widest">No visits booked.</div>
+            ) : (
+              appointments.filter(a => a.status !== 'CANCELLED').slice(0, 3).map(app => (
+                <div key={app.id} className="p-5 bg-slate-50/50 rounded-3xl border border-transparent hover:border-slate-200 transition-all flex items-center space-x-4">
+                  <div className="w-12 h-12 bg-white rounded-xl border border-slate-100 flex items-center justify-center text-lg shadow-sm">🩺</div>
+                  <div className="flex-1">
+                    <p className="text-sm font-black text-slate-800">{app.doctorName}</p>
+                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-1">{app.date} • {app.time}</p>
                   </div>
-                ))
-              )}
-           </div>
-           <button onClick={() => handleTabChange('booking')} className="w-full mt-8 py-4 border-2 border-slate-100 rounded-2xl text-[10px] font-black uppercase tracking-[0.2em] hover:bg-slate-50 transition-all text-slate-500">View All Sessions</button>
+                </div>
+              ))
+            )}
+          </div>
+          <button onClick={() => handleTabChange('booking')} className="w-full mt-8 py-4 border-2 border-slate-100 rounded-2xl text-[10px] font-black uppercase tracking-[0.2em] hover:bg-slate-50 transition-all text-slate-500">View All Sessions</button>
         </div>
       </div>
     </div>
@@ -274,184 +275,184 @@ const PatientDashboard: React.FC<PatientDashboardProps> = ({
 
   const renderBooking = () => (
     <div className="max-w-4xl mx-auto space-y-12 animate-in slide-in-from-bottom-6 duration-500">
-       <div className="text-center">
-          <h2 className="text-3xl font-black tracking-tight text-slate-900">Clinical Scheduling</h2>
-          <p className="text-sm font-black text-slate-400 uppercase tracking-[0.2em] mt-2">Verified Specialists Available</p>
-       </div>
-       
-       {isBookingSuccessful ? (
-         <div className="p-16 bg-green-50 rounded-[48px] border-4 border-white shadow-2xl text-center">
-            <div className="text-5xl mb-6 text-green-500">✅</div>
-            <h3 className="text-2xl font-black text-green-900 tracking-tight">Appointment Sync Requested</h3>
-            <p className="text-green-600 font-bold mt-2">Your physician will confirm the session shortly.</p>
-            <button onClick={() => { setIsBookingSuccessful(false); handleTabChange('dashboard'); }} className="mt-8 px-10 py-4 bg-green-600 text-white rounded-2xl font-black uppercase tracking-widest text-xs shadow-lg shadow-green-200 hover:bg-green-700 transition-all">Back to Home</button>
-         </div>
-       ) : (
-         <div className="grid grid-cols-1 md:grid-cols-2 gap-10">
-            <div className="space-y-6">
-               <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">1. Choose Specialist</p>
-               <div className="space-y-4">
-                  {MOCK_DOCTORS.map(doc => (
-                    <button key={doc.id} onClick={() => setSelectedDoctorId(doc.id)} className={`w-full p-6 rounded-[32px] border-2 transition-all text-left flex items-center space-x-5 ${selectedDoctorId === doc.id ? 'bg-white border-[#3b5bfd] shadow-2xl shadow-blue-500/10' : 'bg-white border-slate-100 hover:bg-slate-50 hover:border-slate-200'}`}>
-                       <div className="w-14 h-14 bg-white rounded-2xl overflow-hidden border border-slate-100"><img src={`https://api.dicebear.com/7.x/avataaars/svg?seed=${doc.name}`} alt="" /></div>
-                       <div>
-                          <p className="text-base font-black text-slate-800 tracking-tight">{doc.name}</p>
-                          <p className="text-[10px] font-black text-[#3b5bfd] uppercase tracking-widest mt-1">{doc.specialty}</p>
-                       </div>
-                    </button>
+      <div className="text-center">
+        <h2 className="text-3xl font-black tracking-tight text-slate-900">Clinical Scheduling</h2>
+        <p className="text-sm font-black text-slate-400 uppercase tracking-[0.2em] mt-2">Verified Specialists Available</p>
+      </div>
+
+      {isBookingSuccessful ? (
+        <div className="p-16 bg-green-50 rounded-[48px] border-4 border-white shadow-2xl text-center">
+          <div className="text-5xl mb-6 text-green-500">✅</div>
+          <h3 className="text-2xl font-black text-green-900 tracking-tight">Appointment Sync Requested</h3>
+          <p className="text-green-600 font-bold mt-2">Your physician will confirm the session shortly.</p>
+          <button onClick={() => { setIsBookingSuccessful(false); handleTabChange('dashboard'); }} className="mt-8 px-10 py-4 bg-green-600 text-white rounded-2xl font-black uppercase tracking-widest text-xs shadow-lg shadow-green-200 hover:bg-green-700 transition-all">Back to Home</button>
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-10">
+          <div className="space-y-6">
+            <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">1. Choose Specialist</p>
+            <div className="space-y-4">
+              {MOCK_DOCTORS.map(doc => (
+                <button key={doc.id} onClick={() => setSelectedDoctorId(doc.id)} className={`w-full p-6 rounded-[32px] border-2 transition-all text-left flex items-center space-x-5 ${selectedDoctorId === doc.id ? 'bg-white border-[#3b5bfd] shadow-2xl shadow-blue-500/10' : 'bg-white border-slate-100 hover:bg-slate-50 hover:border-slate-200'}`}>
+                  <div className="w-14 h-14 bg-white rounded-2xl overflow-hidden border border-slate-100"><img src={`https://api.dicebear.com/7.x/avataaars/svg?seed=${doc.name}`} alt="" /></div>
+                  <div>
+                    <p className="text-base font-black text-slate-800 tracking-tight">{doc.name}</p>
+                    <p className="text-[10px] font-black text-[#3b5bfd] uppercase tracking-widest mt-1">{doc.specialty}</p>
+                  </div>
+                </button>
+              ))}
+            </div>
+          </div>
+          <div className="space-y-10">
+            <div className="bg-white p-8 rounded-[40px] border border-slate-100 shadow-sm space-y-8">
+              <div className="space-y-2">
+                <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">Visit Date</label>
+                <input type="date" value={bookingDate} onChange={e => setBookingDate(e.target.value)} className="w-full p-4 bg-slate-50 border border-slate-100 rounded-2xl font-black outline-none focus:bg-white focus:border-[#3b5bfd] transition-all text-slate-700" />
+              </div>
+              <div className="space-y-4">
+                <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">Time Slot</label>
+                <div className="grid grid-cols-2 gap-3">
+                  {['09:00 AM', '11:00 AM', '02:00 PM', '04:30 PM'].map(t => (
+                    <button key={t} onClick={() => setBookingTime(t)} className={`py-4 rounded-xl text-[10px] font-black uppercase tracking-widest border transition-all ${bookingTime === t ? 'bg-[#3b5bfd] text-white border-[#3b5bfd]' : 'bg-slate-50 text-slate-500 border-transparent hover:border-slate-200'}`}>{t}</button>
                   ))}
-               </div>
+                </div>
+              </div>
             </div>
-            <div className="space-y-10">
-               <div className="bg-white p-8 rounded-[40px] border border-slate-100 shadow-sm space-y-8">
-                  <div className="space-y-2">
-                     <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">Visit Date</label>
-                     <input type="date" value={bookingDate} onChange={e => setBookingDate(e.target.value)} className="w-full p-4 bg-slate-50 border border-slate-100 rounded-2xl font-black outline-none focus:bg-white focus:border-[#3b5bfd] transition-all text-slate-700" />
-                  </div>
-                  <div className="space-y-4">
-                     <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">Time Slot</label>
-                     <div className="grid grid-cols-2 gap-3">
-                        {['09:00 AM', '11:00 AM', '02:00 PM', '04:30 PM'].map(t => (
-                          <button key={t} onClick={() => setBookingTime(t)} className={`py-4 rounded-xl text-[10px] font-black uppercase tracking-widest border transition-all ${bookingTime === t ? 'bg-[#3b5bfd] text-white border-[#3b5bfd]' : 'bg-slate-50 text-slate-500 border-transparent hover:border-slate-200'}`}>{t}</button>
-                        ))}
-                     </div>
-                  </div>
-               </div>
-               <button 
-                disabled={!selectedDoctorId || !bookingDate || !bookingTime}
-                onClick={() => { onBook(selectedDoctorId!, MOCK_DOCTORS.find(d => d.id === selectedDoctorId)!.name, bookingDate, bookingTime); setIsBookingSuccessful(true); }}
-                className="w-full py-6 bg-slate-900 text-white rounded-[32px] font-black text-sm uppercase tracking-[0.3em] shadow-2xl hover:bg-black transition-all disabled:opacity-30 disabled:grayscale"
-               >
-                  Book Session
-               </button>
-            </div>
-         </div>
-       )}
+            <button
+              disabled={!selectedDoctorId || !bookingDate || !bookingTime}
+              onClick={() => { onBook(selectedDoctorId!, MOCK_DOCTORS.find(d => d.id === selectedDoctorId)!.name, bookingDate, bookingTime); setIsBookingSuccessful(true); }}
+              className="w-full py-6 bg-slate-900 text-white rounded-[32px] font-black text-sm uppercase tracking-[0.3em] shadow-2xl hover:bg-black transition-all disabled:opacity-30 disabled:grayscale"
+            >
+              Book Session
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 
   const renderFacilities = () => (
     <div className="space-y-10 animate-in fade-in duration-500">
-       <div className="flex flex-col md:flex-row justify-between items-center gap-6">
-          <div>
-            <h2 className="text-3xl font-black tracking-tight flex items-center text-slate-900">Clinic & Labs Finder {isSearchingFacilities && <div className="ml-4 w-2 h-2 bg-blue-500 rounded-full animate-ping"></div>}</h2>
-            <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mt-2">Real-time Verified Healthcare Network</p>
-          </div>
-          <div className="flex bg-white p-1.5 rounded-2xl border border-slate-100 shadow-sm overflow-x-auto scrollbar-hide">
-             {['Clinics', 'Labs', 'Hospitals', 'Emergency'].map(cat => (
-               <button 
-                key={cat} 
-                onClick={() => handleCategoryFilter(cat)} 
-                className={`px-6 py-3 rounded-xl text-[9px] font-black uppercase tracking-widest transition-all ${facilityCategory === cat ? 'bg-[#3b5bfd] text-white shadow-lg' : 'text-slate-400 hover:bg-slate-50 hover:text-slate-800'}`}
-               >
-                {cat}
-               </button>
-             ))}
-          </div>
-       </div>
+      <div className="flex flex-col md:flex-row justify-between items-center gap-6">
+        <div>
+          <h2 className="text-3xl font-black tracking-tight flex items-center text-slate-900">Clinic & Labs Finder {isSearchingFacilities && <div className="ml-4 w-2 h-2 bg-blue-500 rounded-full animate-ping"></div>}</h2>
+          <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mt-2">Real-time Verified Healthcare Network</p>
+        </div>
+        <div className="flex bg-white p-1.5 rounded-2xl border border-slate-100 shadow-sm overflow-x-auto scrollbar-hide">
+          {['Clinics', 'Labs', 'Hospitals', 'Emergency'].map(cat => (
+            <button
+              key={cat}
+              onClick={() => handleCategoryFilter(cat)}
+              className={`px-6 py-3 rounded-xl text-[9px] font-black uppercase tracking-widest transition-all ${facilityCategory === cat ? 'bg-[#3b5bfd] text-white shadow-lg' : 'text-slate-400 hover:bg-slate-50 hover:text-slate-800'}`}
+            >
+              {cat}
+            </button>
+          ))}
+        </div>
+      </div>
 
-       <div className="grid grid-cols-1 lg:grid-cols-3 gap-10">
-          <div className="lg:col-span-2 bg-white rounded-[48px] border border-slate-100 shadow-sm overflow-hidden h-[600px] relative group">
-             {/* Digital Map Representation */}
-             <div className="absolute inset-0 bg-[#f8fafc] opacity-50 pointer-events-none bg-[radial-gradient(#cbd5e1_1px,transparent_1px)] [background-size:20px_20px]"></div>
-             
-             {/* Interactive Area */}
-             <div className="w-full h-full relative p-10 flex items-center justify-center">
-                {/* Simulated User Location Marker */}
-                <div className="absolute w-12 h-12 bg-blue-500/20 rounded-full flex items-center justify-center animate-pulse border-2 border-blue-400/30">
-                   <div className="w-4 h-4 bg-blue-600 rounded-full border-2 border-white shadow-lg"></div>
-                   <div className="absolute -top-8 bg-slate-900 text-white text-[8px] font-black uppercase px-2 py-1 rounded">You</div>
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-10">
+        <div className="lg:col-span-2 bg-white rounded-[48px] border border-slate-100 shadow-sm overflow-hidden h-[600px] relative group">
+          {/* Digital Map Representation */}
+          <div className="absolute inset-0 bg-[#f8fafc] opacity-50 pointer-events-none bg-[radial-gradient(#cbd5e1_1px,transparent_1px)] [background-size:20px_20px]"></div>
+
+          {/* Interactive Area */}
+          <div className="w-full h-full relative p-10 flex items-center justify-center">
+            {/* Simulated User Location Marker */}
+            <div className="absolute w-12 h-12 bg-blue-500/20 rounded-full flex items-center justify-center animate-pulse border-2 border-blue-400/30">
+              <div className="w-4 h-4 bg-blue-600 rounded-full border-2 border-white shadow-lg"></div>
+              <div className="absolute -top-8 bg-slate-900 text-white text-[8px] font-black uppercase px-2 py-1 rounded">You</div>
+            </div>
+
+            {/* Satellite Scanning HUD */}
+            <div className="absolute top-8 left-8 p-4 bg-white/60 backdrop-blur-md rounded-2xl border border-slate-100 shadow-sm z-10 pointer-events-none">
+              <p className="text-[8px] font-black uppercase tracking-widest text-slate-400">Satellite Status</p>
+              <p className={`text-[10px] font-black uppercase mt-1 ${isSearchingFacilities ? 'text-blue-500' : 'text-green-500'}`}>
+                {isSearchingFacilities ? "Scanning Frequencies..." : "Linked • Active Grid"}
+              </p>
+            </div>
+
+            {/* Facility Markers */}
+            {!isSearchingFacilities && liveFacilities.map((f, i) => (
+              <div
+                key={i}
+                className="absolute cursor-pointer hover:scale-110 transition-transform group/marker"
+                style={{
+                  top: `${50 + (f.latOffset || 0) * 1000}%`,
+                  left: `${50 + (f.lngOffset || 0) * 1000}%`
+                }}
+                onClick={() => window.open(f.uri, '_blank')}
+              >
+                <div className="w-10 h-10 bg-white rounded-2xl border-2 border-[#3b5bfd] shadow-xl flex items-center justify-center text-lg relative z-10">
+                  {facilityCategory === 'Labs' ? '🧪' : facilityCategory === 'Hospitals' ? '🏥' : '🩺'}
                 </div>
-
-                {/* Satellite Scanning HUD */}
-                <div className="absolute top-8 left-8 p-4 bg-white/60 backdrop-blur-md rounded-2xl border border-slate-100 shadow-sm z-10 pointer-events-none">
-                   <p className="text-[8px] font-black uppercase tracking-widest text-slate-400">Satellite Status</p>
-                   <p className={`text-[10px] font-black uppercase mt-1 ${isSearchingFacilities ? 'text-blue-500' : 'text-green-500'}`}>
-                      {isSearchingFacilities ? "Scanning Frequencies..." : "Linked • Active Grid"}
-                   </p>
+                <div className="absolute top-12 left-1/2 -translate-x-1/2 bg-slate-900 text-white text-[9px] font-black px-3 py-1.5 rounded-lg opacity-0 group-hover/marker:opacity-100 transition-opacity whitespace-nowrap z-20 shadow-2xl">
+                  {f.name}
                 </div>
+                <div className="absolute inset-0 bg-[#3b5bfd] rounded-2xl animate-ping opacity-10"></div>
+              </div>
+            ))}
 
-                {/* Facility Markers */}
-                {!isSearchingFacilities && liveFacilities.map((f, i) => (
-                   <div 
-                    key={i} 
-                    className="absolute cursor-pointer hover:scale-110 transition-transform group/marker" 
-                    style={{ 
-                      top: `${50 + (f.latOffset || 0) * 1000}%`, 
-                      left: `${50 + (f.lngOffset || 0) * 1000}%` 
-                    }}
-                    onClick={() => window.open(f.uri, '_blank')}
-                   >
-                      <div className="w-10 h-10 bg-white rounded-2xl border-2 border-[#3b5bfd] shadow-xl flex items-center justify-center text-lg relative z-10">
-                         {facilityCategory === 'Labs' ? '🧪' : facilityCategory === 'Hospitals' ? '🏥' : '🩺'}
-                      </div>
-                      <div className="absolute top-12 left-1/2 -translate-x-1/2 bg-slate-900 text-white text-[9px] font-black px-3 py-1.5 rounded-lg opacity-0 group-hover/marker:opacity-100 transition-opacity whitespace-nowrap z-20 shadow-2xl">
-                         {f.name}
-                      </div>
-                      <div className="absolute inset-0 bg-[#3b5bfd] rounded-2xl animate-ping opacity-10"></div>
-                   </div>
-                ))}
-                
-                {isSearchingFacilities && (
-                  <div className="flex flex-col items-center justify-center text-center space-y-4">
-                     <div className="w-16 h-16 border-4 border-[#3b5bfd] border-t-transparent rounded-full animate-spin"></div>
-                     <p className="text-[10px] font-black uppercase tracking-[0.3em] text-slate-400">Synchronizing Spatial Data...</p>
+            {isSearchingFacilities && (
+              <div className="flex flex-col items-center justify-center text-center space-y-4">
+                <div className="w-16 h-16 border-4 border-[#3b5bfd] border-t-transparent rounded-full animate-spin"></div>
+                <p className="text-[10px] font-black uppercase tracking-[0.3em] text-slate-400">Synchronizing Spatial Data...</p>
+              </div>
+            )}
+          </div>
+
+          <div className="absolute bottom-6 right-6 flex space-x-2">
+            <div className="px-4 py-2 bg-white/80 backdrop-blur-md rounded-xl text-[8px] font-black text-slate-400 uppercase border border-slate-100">Zoom: Adaptive</div>
+            <div className="px-4 py-2 bg-white/80 backdrop-blur-md rounded-xl text-[8px] font-black text-slate-400 uppercase border border-slate-100">Layer: Bio-Clinical</div>
+          </div>
+        </div>
+
+        <div className="bg-white rounded-[48px] border border-slate-100 shadow-sm overflow-hidden flex flex-col h-[600px]">
+          <div className="p-8 border-b border-slate-50 bg-slate-50/50 flex items-center justify-between">
+            <div>
+              <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">Results for {facilityCategory}</span>
+              <p className="text-[9px] font-bold text-slate-400 mt-1">Found in your immediate vicinity</p>
+            </div>
+            {liveFacilities.length > 0 && <span className="bg-blue-100 text-blue-600 px-3 py-1 rounded-lg text-[9px] font-black">{liveFacilities.length} Results</span>}
+          </div>
+          <div className="flex-1 overflow-y-auto p-6 space-y-5 scrollbar-hide">
+            {isSearchingFacilities ? (
+              Array.from({ length: 4 }).map((_, i) => (
+                <div key={i} className="p-6 bg-slate-50/50 rounded-3xl border border-transparent animate-pulse space-y-4">
+                  <div className="h-4 bg-slate-200 rounded w-3/4"></div>
+                  <div className="h-3 bg-slate-100 rounded w-1/2"></div>
+                  <div className="h-3 bg-slate-100 rounded w-2/3"></div>
+                </div>
+              ))
+            ) : liveFacilities.length === 0 ? (
+              <div className="h-full flex flex-col items-center justify-center text-center opacity-30 p-10">
+                <div className="text-6xl mb-6">🛰️</div>
+                <p className="text-[10px] font-black uppercase tracking-widest leading-relaxed">System Ready • Select category or update location to begin scanning verified clinical endpoints.</p>
+              </div>
+            ) : (
+              liveFacilities.map((f, i) => (
+                <article key={i} className="p-6 bg-white border border-slate-100 rounded-3xl hover:border-[#3b5bfd] hover:shadow-lg transition-all group cursor-pointer" onClick={() => window.open(f.uri, '_blank')}>
+                  <div className="flex justify-between items-start mb-4">
+                    <h4 className="font-black text-slate-800 text-base leading-tight tracking-tight group-hover:text-[#3b5bfd] transition-colors">{f.name}</h4>
+                    <span className="text-[8px] font-black text-slate-300 uppercase bg-slate-50 px-2 py-1 rounded">#{i + 1}</span>
                   </div>
-                )}
-             </div>
-
-             <div className="absolute bottom-6 right-6 flex space-x-2">
-                <div className="px-4 py-2 bg-white/80 backdrop-blur-md rounded-xl text-[8px] font-black text-slate-400 uppercase border border-slate-100">Zoom: Adaptive</div>
-                <div className="px-4 py-2 bg-white/80 backdrop-blur-md rounded-xl text-[8px] font-black text-slate-400 uppercase border border-slate-100">Layer: Bio-Clinical</div>
-             </div>
-          </div>
-
-          <div className="bg-white rounded-[48px] border border-slate-100 shadow-sm overflow-hidden flex flex-col h-[600px]">
-             <div className="p-8 border-b border-slate-50 bg-slate-50/50 flex items-center justify-between">
-                <div>
-                  <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">Results for {facilityCategory}</span>
-                  <p className="text-[9px] font-bold text-slate-400 mt-1">Found in your immediate vicinity</p>
-                </div>
-                {liveFacilities.length > 0 && <span className="bg-blue-100 text-blue-600 px-3 py-1 rounded-lg text-[9px] font-black">{liveFacilities.length} Results</span>}
-             </div>
-             <div className="flex-1 overflow-y-auto p-6 space-y-5 scrollbar-hide">
-                {isSearchingFacilities ? (
-                  Array.from({length: 4}).map((_, i) => (
-                    <div key={i} className="p-6 bg-slate-50/50 rounded-3xl border border-transparent animate-pulse space-y-4">
-                       <div className="h-4 bg-slate-200 rounded w-3/4"></div>
-                       <div className="h-3 bg-slate-100 rounded w-1/2"></div>
-                       <div className="h-3 bg-slate-100 rounded w-2/3"></div>
+                  <div className="flex items-center space-x-3 text-[10px] text-slate-500 font-bold mb-4">
+                    <span className="flex items-center"><span className="mr-1">📍</span> {f.address}</span>
+                  </div>
+                  <p className="text-[10px] font-medium text-slate-400 italic line-clamp-2 bg-slate-50/50 p-3 rounded-xl border border-slate-100">"{f.clinicalContext}"</p>
+                  <div className="mt-5 pt-4 border-t border-slate-50 flex justify-between items-center">
+                    <span className="text-[9px] font-black text-[#3b5bfd] uppercase tracking-widest group-hover:translate-x-1 transition-transform">Visit Profile ➜</span>
+                    <div className="flex space-x-2">
+                      <div className="w-8 h-8 rounded-lg bg-blue-50 flex items-center justify-center text-xs">📞</div>
+                      <div className="w-8 h-8 rounded-lg bg-blue-50 flex items-center justify-center text-xs">✉️</div>
                     </div>
-                  ))
-                ) : liveFacilities.length === 0 ? (
-                  <div className="h-full flex flex-col items-center justify-center text-center opacity-30 p-10">
-                     <div className="text-6xl mb-6">🛰️</div>
-                     <p className="text-[10px] font-black uppercase tracking-widest leading-relaxed">System Ready • Select category or update location to begin scanning verified clinical endpoints.</p>
                   </div>
-                ) : (
-                  liveFacilities.map((f, i) => (
-                    <article key={i} className="p-6 bg-white border border-slate-100 rounded-3xl hover:border-[#3b5bfd] hover:shadow-lg transition-all group cursor-pointer" onClick={() => window.open(f.uri, '_blank')}>
-                       <div className="flex justify-between items-start mb-4">
-                          <h4 className="font-black text-slate-800 text-base leading-tight tracking-tight group-hover:text-[#3b5bfd] transition-colors">{f.name}</h4>
-                          <span className="text-[8px] font-black text-slate-300 uppercase bg-slate-50 px-2 py-1 rounded">#{i+1}</span>
-                       </div>
-                       <div className="flex items-center space-x-3 text-[10px] text-slate-500 font-bold mb-4">
-                          <span className="flex items-center"><span className="mr-1">📍</span> {f.address}</span>
-                       </div>
-                       <p className="text-[10px] font-medium text-slate-400 italic line-clamp-2 bg-slate-50/50 p-3 rounded-xl border border-slate-100">"{f.clinicalContext}"</p>
-                       <div className="mt-5 pt-4 border-t border-slate-50 flex justify-between items-center">
-                          <span className="text-[9px] font-black text-[#3b5bfd] uppercase tracking-widest group-hover:translate-x-1 transition-transform">Visit Profile ➜</span>
-                          <div className="flex space-x-2">
-                             <div className="w-8 h-8 rounded-lg bg-blue-50 flex items-center justify-center text-xs">📞</div>
-                             <div className="w-8 h-8 rounded-lg bg-blue-50 flex items-center justify-center text-xs">✉️</div>
-                          </div>
-                       </div>
-                    </article>
-                  ))
-                )}
-             </div>
+                </article>
+              ))
+            )}
           </div>
-       </div>
+        </div>
+      </div>
     </div>
   );
 
@@ -459,81 +460,83 @@ const PatientDashboard: React.FC<PatientDashboardProps> = ({
     <div className="max-w-7xl mx-auto pb-20">
       {/* View Switcher */}
       <nav className="flex space-x-2 bg-white/50 backdrop-blur-md p-1.5 rounded-[28px] border border-white/50 mb-10 w-fit">
-         {[
-           { id: 'dashboard', label: 'Overview', icon: '🏠' },
-           { id: 'booking', label: 'Visits', icon: '📅' },
-           { id: 'facilities', label: 'Facility Explorer', icon: '📍' },
-           { id: 'reports', label: 'Clinical Vault', icon: '📄' },
-         ].map(t => (
-           <button 
-            key={t.id} 
+        {[
+          { id: 'dashboard', label: 'Overview', icon: '🏠' },
+          { id: 'booking', label: 'Visits', icon: '📅' },
+          { id: 'facilities', label: 'Facility Explorer', icon: '📍' },
+          { id: 'reports', label: 'Clinical Vault', icon: '📄' },
+          { id: 'pharmacy', label: 'Pharmacy', icon: '💊' },
+        ].map(t => (
+          <button
+            key={t.id}
             onClick={() => handleTabChange(t.id as any)}
             className={`px-6 py-3.5 rounded-2xl text-[10px] font-black uppercase tracking-[0.2em] transition-all flex items-center space-x-3 ${activeTab === t.id ? 'bg-white text-[#3b5bfd] shadow-xl shadow-blue-500/5' : 'text-slate-400 hover:text-slate-600'}`}
-           >
-             <span>{t.icon}</span>
-             <span className="hidden sm:inline">{t.label}</span>
-           </button>
-         ))}
+          >
+            <span>{t.icon}</span>
+            <span className="hidden sm:inline">{t.label}</span>
+          </button>
+        ))}
       </nav>
 
       {activeTab === 'dashboard' && renderHome()}
       {activeTab === 'booking' && renderBooking()}
       {activeTab === 'facilities' && renderFacilities()}
       {activeTab === 'reports' && <div className="p-20 text-center text-slate-300 font-black uppercase text-[11px] tracking-widest bg-white rounded-[48px] border border-slate-100">Medical Repository Syncing...</div>}
+      {activeTab === 'pharmacy' && <Pharmacy />}
 
       {/* Body Scanner Modal */}
       {isBodyScanOpen && (
-        <BodyScanner 
-          onCancel={() => setIsBodyScanOpen(false)} 
-          onConfirm={(areas) => { 
-            setActivePainMap(areas); 
-            setIsBodyScanOpen(false); 
-          }} 
+        <BodyScanner
+          onCancel={() => setIsBodyScanOpen(false)}
+          onConfirm={(areas) => {
+            setActivePainMap(areas);
+            setIsBodyScanOpen(false);
+          }}
         />
       )}
 
       {/* AI Modals */}
       {isChatOpen && (
         <div className="fixed inset-0 z-[3000] bg-slate-950/60 backdrop-blur-md flex items-center justify-center p-6 animate-in fade-in duration-300">
-           <div className="max-w-md w-full h-[700px] bg-white rounded-[48px] shadow-2xl flex flex-col overflow-hidden border border-slate-100 animate-in zoom-in-95 duration-300">
-              <div className={`p-8 ${chatType === 'symptom' ? 'bg-[#1a1d1f]' : 'bg-[#3b5bfd]'} text-white flex justify-between items-center`}>
-                 <div className="flex items-center space-x-4">
-                    <div className="w-12 h-12 bg-white/20 rounded-2xl flex items-center justify-center font-black">✨</div>
-                    <div>
-                       <p className="font-black text-sm tracking-tight">{chatType === 'intake' ? 'Clinical Intake Assistant' : 'AI Symptom Triage'}</p>
-                       <p className="text-[9px] font-black uppercase tracking-widest opacity-60">Session Encrypted</p>
-                    </div>
-                 </div>
-                 <button onClick={() => setIsChatOpen(false)} className="w-10 h-10 bg-white/10 rounded-full flex items-center justify-center hover:bg-white/20 transition-all">✕</button>
+          <div className="max-w-md w-full h-[700px] bg-white rounded-[48px] shadow-2xl flex flex-col overflow-hidden border border-slate-100 animate-in zoom-in-95 duration-300">
+            <div className={`p-8 ${chatType === 'symptom' ? 'bg-[#1a1d1f]' : 'bg-[#3b5bfd]'} text-white flex justify-between items-center`}>
+              <div className="flex items-center space-x-4">
+                <div className="w-12 h-12 bg-white/20 rounded-2xl flex items-center justify-center font-black">✨</div>
+                <div>
+                  <p className="font-black text-sm tracking-tight">{chatType === 'intake' ? 'Clinical Intake Assistant' : 'AI Symptom Triage'}</p>
+                  <p className="text-[9px] font-black uppercase tracking-widest opacity-60">Session Encrypted</p>
+                </div>
               </div>
-              <div ref={scrollRef} className="flex-1 overflow-y-auto p-8 space-y-6 bg-slate-50/50 scrollbar-hide">
-                 {chatHistory.map((m, i) => (
-                    <div key={i} className={`flex ${m.role === 'user' ? 'justify-end' : 'justify-start'} animate-in slide-in-from-bottom-2`}>
-                       <div className={`max-w-[85%] p-5 rounded-[28px] text-sm leading-relaxed font-medium shadow-sm ${m.role === 'user' ? 'bg-[#3b5bfd] text-white rounded-tr-none shadow-blue-500/20' : 'bg-white text-slate-700 border border-slate-100 rounded-tl-none'}`}>
-                          {m.text}
-                       </div>
-                    </div>
-                 ))}
-                 {isTyping && <div className="text-[9px] font-black uppercase text-blue-500 animate-pulse tracking-widest ml-1">Cayr AI is analyzing input...</div>}
-              </div>
-              <div className="p-8 bg-white border-t border-slate-100 space-y-6">
-                 {reportReady && (
-                   <button 
-                    disabled={isGeneratingReport} 
-                    onClick={handleCreateReport} 
-                    className="w-full bg-emerald-500 text-white py-5 rounded-[24px] font-black uppercase text-[10px] tracking-widest shadow-xl shadow-emerald-500/20 hover:bg-emerald-600 transition-all"
-                   >
-                     {isGeneratingReport ? 'Compiling Medical SOAP Note...' : 'Finalize Intake Report'}
-                   </button>
-                 )}
-                 <form onSubmit={handleSendMessage} className="flex space-x-3">
-                    <input value={chatInput} onChange={e => setChatInput(e.target.value)} placeholder="Provide clinical details..." className="flex-1 p-5 bg-slate-100 border border-slate-200 rounded-3xl text-sm font-medium outline-none focus:bg-white focus:border-blue-500 transition-all text-slate-800" />
-                    <button type="submit" disabled={isTyping || !chatInput.trim()} className="w-16 h-16 bg-[#3b5bfd] text-white rounded-3xl flex items-center justify-center shadow-xl shadow-blue-500/20 active:scale-90 transition-all group">
-                       <span className="group-hover:translate-x-1 transition-transform">➜</span>
-                    </button>
-                 </form>
-              </div>
-           </div>
+              <button onClick={() => setIsChatOpen(false)} className="w-10 h-10 bg-white/10 rounded-full flex items-center justify-center hover:bg-white/20 transition-all">✕</button>
+            </div>
+            <div ref={scrollRef} className="flex-1 overflow-y-auto p-8 space-y-6 bg-slate-50/50 scrollbar-hide">
+              {chatHistory.map((m, i) => (
+                <div key={i} className={`flex ${m.role === 'user' ? 'justify-end' : 'justify-start'} animate-in slide-in-from-bottom-2`}>
+                  <div className={`max-w-[85%] p-5 rounded-[28px] text-sm leading-relaxed font-medium shadow-sm ${m.role === 'user' ? 'bg-[#3b5bfd] text-white rounded-tr-none shadow-blue-500/20' : 'bg-white text-slate-700 border border-slate-100 rounded-tl-none'}`}>
+                    {m.text}
+                  </div>
+                </div>
+              ))}
+              {isTyping && <div className="text-[9px] font-black uppercase text-blue-500 animate-pulse tracking-widest ml-1">Cayr AI is analyzing input...</div>}
+            </div>
+            <div className="p-8 bg-white border-t border-slate-100 space-y-6">
+              {reportReady && (
+                <button
+                  disabled={isGeneratingReport}
+                  onClick={handleCreateReport}
+                  className="w-full bg-emerald-500 text-white py-5 rounded-[24px] font-black uppercase text-[10px] tracking-widest shadow-xl shadow-emerald-500/20 hover:bg-emerald-600 transition-all"
+                >
+                  {isGeneratingReport ? 'Compiling Medical SOAP Note...' : 'Finalize Intake Report'}
+                </button>
+              )}
+              <form onSubmit={handleSendMessage} className="flex space-x-3">
+                <input value={chatInput} onChange={e => setChatInput(e.target.value)} placeholder="Provide clinical details..." className="flex-1 p-5 bg-slate-100 border border-slate-200 rounded-3xl text-sm font-medium outline-none focus:bg-white focus:border-blue-500 transition-all text-slate-800" />
+                <button type="submit" disabled={isTyping || !chatInput.trim()} className="w-16 h-16 bg-[#3b5bfd] text-white rounded-3xl flex items-center justify-center shadow-xl shadow-blue-500/20 active:scale-90 transition-all group">
+                  <span className="group-hover:translate-x-1 transition-transform">➜</span>
+                </button>
+              </form>
+            </div>
+          </div>
         </div>
       )}
 

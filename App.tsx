@@ -3,6 +3,8 @@ import React, { useState, useEffect } from 'react';
 import Layout from './components/Layout';
 import PatientDashboard from './components/PatientDashboard';
 import DoctorDashboard from './components/DoctorDashboard';
+import AdminDashboard from './components/AdminDashboard';
+import AmbulanceDashboard from './components/AmbulanceDashboard';
 import VideoCall from './components/VideoCall';
 import ProfilePage from './components/ProfilePage';
 import NotificationCenter from './components/NotificationCenter';
@@ -16,21 +18,24 @@ import { INITIAL_APPOINTMENTS, MOCK_DOCTORS } from './constants';
 type AuthFlowStep = 'landing' | 'role_select' | 'auth';
 
 const AppContent: React.FC = () => {
-  const { user, token, isLoading, login, logout } = useAuth();
-  
+  const { user, isLoading, login, logout } = useAuth();
+  console.log("DEBUG → isLoading:", isLoading);
+  console.log("DEBUG → user:", user);
   // Persist current module and flow step to survive reloads
   const [currentModule, setCurrentModule] = useState(() => sessionStorage.getItem('cayr_active_module') || 'Dashboard');
   const [flowStep, setFlowStep] = useState<AuthFlowStep>(() => (sessionStorage.getItem('cayr_flow_step') as AuthFlowStep) || 'landing');
-  
-  const [appointments, setAppointments] = useState<Appointment[]>(INITIAL_APPOINTMENTS);
+
+  const [appointments, setAppointments] = useState<Appointment[]>([]);
   const [loginMode, setLoginMode] = useState<UserRole>(UserRole.PATIENT);
   const [activeCall, setActiveCall] = useState<{ partnerName: string, partnerRole: string } | null>(null);
   const [selectedDetailedPatient, setSelectedDetailedPatient] = useState<PatientRecord | null>(null);
   const [isModalLoading, setIsModalLoading] = useState(false);
   const [isTableLoading, setIsTableLoading] = useState(false);
-  
+
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [name, setName] = useState('');
+  const [isRegistering, setIsRegistering] = useState(false);
 
   // Update session storage when navigation changes
   useEffect(() => {
@@ -40,6 +45,142 @@ const AppContent: React.FC = () => {
   useEffect(() => {
     sessionStorage.setItem('cayr_flow_step', flowStep);
   }, [flowStep]);
+
+  useEffect(() => {
+    if (user?.role === UserRole.DOCTOR || user?.role === UserRole.ADMIN) {
+      fetchPatients();
+    }
+    if (user?.role === UserRole.ADMIN) {
+      fetchDoctors();
+    }
+    fetchAppointments();
+    fetchMedicalReports();
+  }, [user]);
+
+  const fetchDoctors = async () => {
+    try {
+      const res = await fetch('/api/users?role=DOCTOR');
+      if (res.ok) {
+        const data = await res.json();
+        const mappedData = data.map((item: any) => ({
+          ...item,
+          id: item._id,
+        }));
+        setDoctors(mappedData);
+      }
+    } catch (error) {
+      console.error('Error fetching doctors:', error);
+    }
+  };
+
+  const fetchMedicalReports = async () => {
+    try {
+      const res = await fetch('/api/reports');
+      if (res.ok) {
+        const data = await res.json();
+        const mappedData = data.map((item: any) => ({
+          ...item,
+          id: item._id,
+        }));
+        setMedicalReports(mappedData);
+      }
+    } catch (error) {
+      console.error('Error fetching reports:', error);
+    }
+  };
+
+  const handleAddReport = async (report: MedicalReport) => {
+    try {
+      // Remove id if it's a temp ID or let backend handle it
+      const { id, ...reportData } = report;
+      const res = await fetch('/api/reports', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(reportData),
+      });
+      if (res.ok) {
+        await fetchMedicalReports();
+      }
+    } catch (error) {
+      console.error('Error adding report:', error);
+    }
+  };
+
+  const fetchPatients = async () => {
+    try {
+      const res = await fetch('/api/patients');
+      if (res.ok) {
+        const data = await res.json();
+        const mappedData = data.map((item: any) => ({
+          ...item,
+          id: item._id,
+        }));
+        setPatients(mappedData);
+      }
+    } catch (error) {
+      console.error('Error fetching patients:', error);
+    }
+  };
+
+  const handleUpdatePatient = async (patient: PatientRecord) => {
+    try {
+      const res = await fetch(`/api/patients/${patient.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(patient),
+      });
+      if (res.ok) {
+        const updated = await res.json();
+        setPatients(prev => prev.map(p => p.id === updated._id ? { ...updated, id: updated._id } : p));
+      }
+    } catch (error) {
+      console.error('Error updating patient:', error);
+    }
+  };
+
+  const fetchAppointments = async () => {
+    try {
+      const res = await fetch('/api/appointments');
+      if (res.ok) {
+        const data = await res.json();
+        // Map _id to id if necessary
+        const mappedData = data.map((item: any) => ({
+          ...item,
+          id: item._id,
+        }));
+        setAppointments(mappedData);
+      }
+    } catch (error) {
+      console.error('Error fetching appointments:', error);
+    }
+  };
+
+  const handleBookAppointment = async (doctorId: string, doctorName: string, date: string, time: string) => {
+    if (!user) return;
+    try {
+      const newAppointment = {
+        patientId: user.id,
+        patientName: user.name,
+        doctorId,
+        doctorName,
+        date,
+        time,
+        status: AppointmentStatus.PENDING,
+      };
+
+      const res = await fetch('/api/appointments', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(newAppointment),
+      });
+
+      if (res.ok) {
+        await fetchAppointments();
+      }
+    } catch (error) {
+      console.error('Error booking appointment:', error);
+    }
+  };
 
   const handleModuleChange = (module: string) => {
     setCurrentModule(module);
@@ -75,24 +216,38 @@ const AppContent: React.FC = () => {
 
   const [medicalReports, setMedicalReports] = useState<MedicalReport[]>([]);
   const [prescriptions, setPrescriptions] = useState<Prescription[]>([]);
-  const [patients, setPatients] = useState<PatientRecord[]>([
-    { id: 'p1', name: 'John Doe', email: 'john.doe@email.com', age: 45, gender: 'Male', bloodType: 'O+', history: [{ condition: 'Hypertension Check', date: '2024-05-10', doctorName: 'Dr. Sarah Wilson' }], allergies: ['Penicillin'], currentMedications: ['Lisinopril 10mg'], vitalsHistory: [], checklists: [], doctorNotes: '', status: PatientStatus.ACTIVE, primaryCondition: 'Hypertension', lastVisit: '2024-05-10' },
-    { id: 'p2', name: 'Jane Smith', email: 'jane.smith@email.com', age: 29, gender: 'Female', bloodType: 'A-', history: [], allergies: [], currentMedications: [], vitalsHistory: [], checklists: [], doctorNotes: '', status: PatientStatus.ACTIVE, primaryCondition: 'General Health', lastVisit: '2024-04-25' },
-    { id: 'p3', name: 'Robert Lee', email: 'robert.lee@email.com', age: 67, gender: 'Male', bloodType: 'B+', history: [], allergies: ['Latex'], currentMedications: ['Metformin'], vitalsHistory: [], checklists: [], doctorNotes: '', status: PatientStatus.RISK, primaryCondition: 'Type 2 Diabetes', lastVisit: '2024-05-12' },
-  ]);
+  const [patients, setPatients] = useState<PatientRecord[]>([]);
+  const [doctors, setDoctors] = useState<User[]>([]);
 
-  const handleLoginSubmit = (e: React.FormEvent) => {
+  const handleLoginSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    const mockToken = "prod_jwt_cayr_" + Date.now();
-    
-    if (loginMode === UserRole.PATIENT) {
-      const mockPatient: User = { id: 'p-demo', name: 'John Doe', email: email || 'demo@cayr.com', role: UserRole.PATIENT, dob: '1990-05-15' };
-      login(mockToken, mockPatient);
-      setCurrentModule('Dashboard');
-    } else {
-      const mockDoctor: User = { ...MOCK_DOCTORS[0], role: UserRole.DOCTOR };
-      login(mockToken, mockDoctor);
-      setCurrentModule('Overview');
+    try {
+      const endpoint = isRegistering ? '/api/auth/register' : '/api/auth/login';
+      const body = isRegistering
+        ? { name, email, password, role: loginMode.toLowerCase() }
+        : { email, password };
+
+      const res = await fetch(endpoint, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Authentication failed');
+
+      if (isRegistering) {
+        // Auto login after register or ask to login
+        setIsRegistering(false);
+        setPassword('');
+        alert('Registration successful! Please login.');
+      } else {
+        login(data.user);
+        setCurrentModule(data.user.role === UserRole.PATIENT ? 'Dashboard' : 'Overview');
+      }
+    } catch (err: any) {
+      console.error(err);
+      alert(err.message);
     }
   };
 
@@ -101,21 +256,27 @@ const AppContent: React.FC = () => {
     switch (currentModule) {
       case 'Dashboard':
       case 'Overview':
+        if (user?.role === UserRole.ADMIN) {
+          return <AdminDashboard user={user} appointments={appointments} patients={patients} doctors={doctors} />;
+        }
+        if (user?.role === UserRole.AMBULANCE) {
+          return <AmbulanceDashboard user={user} patients={patients} />;
+        }
         return isPatient ? (
-          <PatientDashboard user={user} appointments={appointments} medicalReports={medicalReports} prescriptions={prescriptions} payments={payments} onBook={(dId, dName, date, time) => setAppointments(prev => [{ id: `A-${Date.now()}`, patientId: user.id, patientName: user.name, doctorId: dId, doctorName: dName, date, time, status: AppointmentStatus.PENDING }, ...prev])} onAddReport={r => setMedicalReports(prev => [r, ...prev])} onUploadPrescription={presc => setPrescriptions(prev => [presc, ...prev])} view="dashboard" />
+          <PatientDashboard user={user} appointments={appointments} medicalReports={medicalReports} prescriptions={prescriptions} payments={payments} onBook={handleBookAppointment} onAddReport={handleAddReport} onUploadPrescription={presc => setPrescriptions(prev => [presc, ...prev])} view="dashboard" />
         ) : (
-          <DoctorDashboard user={user} appointments={appointments} payments={payments} updateStatus={(id, s) => setAppointments(p => p.map(a => a.id === id ? { ...a, status: s } : a))} patients={patients} onUpdatePatient={p => setPatients(prev => prev.map(o => o.id === p.id ? p : o))} onStartCall={n => setActiveCall({ partnerName: n, partnerRole: 'Patient' })} />
+          <DoctorDashboard user={user} appointments={appointments} payments={payments} updateStatus={(id, s) => { /* Implement update status API */ }} patients={patients} onUpdatePatient={handleUpdatePatient} onStartCall={n => setActiveCall({ partnerName: n, partnerRole: 'Patient' })} />
         );
       case 'Patients':
         return !isPatient ? <PatientsList patients={patients} isLoading={isTableLoading} onViewDetails={handleViewPatientDetail} onSendMessage={n => console.log('Message to', n)} onSchedule={n => console.log('Schedule', n)} /> : null;
       case 'Analytics':
-        return isPatient ? <PatientDashboard user={user} appointments={appointments} medicalReports={medicalReports} prescriptions={prescriptions} payments={payments} onBook={() => {}} onAddReport={() => {}} onUploadPrescription={() => {}} view="analytics" /> : <DoctorDashboard user={user} appointments={appointments} payments={payments} updateStatus={() => {}} patients={patients} onUpdatePatient={() => {}} initialView="Analytics" />;
+        return isPatient ? <PatientDashboard user={user} appointments={appointments} medicalReports={medicalReports} prescriptions={prescriptions} payments={payments} onBook={() => { }} onAddReport={() => { }} onUploadPrescription={() => { }} view="analytics" /> : <DoctorDashboard user={user} appointments={appointments} payments={payments} updateStatus={() => { }} patients={patients} onUpdatePatient={() => { }} initialView="Analytics" />;
       case 'Payments':
         return <TransactionHistory user={user!} payments={payments} />;
       case 'Notifications':
         return <NotificationCenter notifications={notifications} onMarkAsRead={id => setNotifications(p => p.map(n => n.id === id ? { ...n, isRead: true } : n))} onDelete={id => setNotifications(p => p.filter(n => n.id !== id))} onClearAll={() => setNotifications([])} onMarkAllAsRead={() => setNotifications(p => p.map(n => ({ ...n, isRead: true })))} />;
       case 'Profile':
-        return <ProfilePage user={user!} onUpdateProfile={u => login(token!, { ...user!, ...u })} onLogout={logout} />;
+        return <ProfilePage user={user!} onUpdateProfile={u => login({ ...user!, ...u })} onLogout={logout} />;
       default:
         return null;
     }
@@ -168,11 +329,27 @@ const AppContent: React.FC = () => {
               <p className="text-sm text-slate-400 font-bold mt-4 uppercase tracking-widest">Login as {loginMode}</p>
             </div>
             <form onSubmit={handleLoginSubmit} className="space-y-6">
+              {isRegistering && (
+                <input type="text" required placeholder="Full Name" className="w-full px-8 py-5 rounded-3xl auth-input text-slate-800 outline-none text-sm font-black tracking-tight" value={name} onChange={e => setName(e.target.value)} />
+              )}
               <input type="email" required placeholder="Clinical Email" className="w-full px-8 py-5 rounded-3xl auth-input text-slate-800 outline-none text-sm font-black tracking-tight" value={email} onChange={e => setEmail(e.target.value)} />
               <input type="password" required placeholder="Security Key" className="w-full px-8 py-5 rounded-3xl auth-input text-slate-800 outline-none text-sm font-black tracking-tight" value={password} onChange={e => setPassword(e.target.value)} />
-              <button type="submit" className="w-full bg-slate-900 text-white py-6 rounded-3xl font-black text-xs uppercase tracking-[0.3em] shadow-2xl hover:bg-black transition-all">Authorize Session</button>
+              <button type="submit" className="w-full bg-slate-900 text-white py-6 rounded-3xl font-black text-xs uppercase tracking-[0.3em] shadow-2xl hover:bg-black transition-all">
+                {isRegistering ? 'Create Account' : 'Authorize Session'}
+              </button>
+              <div className="text-center">
+                <button type="button" onClick={() => setIsRegistering(!isRegistering)} className="text-slate-500 font-bold text-xs hover:text-blue-600">
+                  {isRegistering ? 'Already have an account? Login' : 'New user? Register'}
+                </button>
+              </div>
             </form>
             <button onClick={() => setFlowStep('role_select')} className="w-full text-center text-slate-400 font-black text-[9px] uppercase tracking-widest hover:text-blue-600 transition-colors">Switch Identity</button>
+          </div>
+        )}
+
+        {!['landing', 'role_select', 'auth'].includes(flowStep) && (
+          <div style={{ color: 'red', textAlign: 'center', marginTop: 50 }}>
+            NO FLOW STEP MATCHED: {flowStep}  <button onClick={() => setFlowStep('landing')}>Reset</button>
           </div>
         )}
       </div>
@@ -184,13 +361,13 @@ const AppContent: React.FC = () => {
       {renderModule()}
       {activeCall && <VideoCall partnerName={activeCall.partnerName} partnerRole={activeCall.partnerRole} onEnd={() => setActiveCall(null)} />}
       {selectedDetailedPatient && (
-        <PatientDetailModal 
-          patient={selectedDetailedPatient} 
+        <PatientDetailModal
+          patient={selectedDetailedPatient}
           isLoading={isModalLoading}
-          onClose={() => setSelectedDetailedPatient(null)} 
+          onClose={() => setSelectedDetailedPatient(null)}
           onStartConsult={n => setActiveCall({ partnerName: n, partnerRole: 'Patient' })}
-          onNewEntry={() => {}}
-          onSchedule={() => {}}
+          onNewEntry={() => { }}
+          onSchedule={() => { }}
         />
       )}
     </Layout>

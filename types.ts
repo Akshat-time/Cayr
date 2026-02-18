@@ -2,7 +2,8 @@
 export enum UserRole {
   PATIENT = 'PATIENT',
   DOCTOR = 'DOCTOR',
-  ADMIN = 'ADMIN'
+  ADMIN = 'ADMIN',
+  AMBULANCE = 'AMBULANCE'
 }
 
 export enum AppointmentStatus {
@@ -29,7 +30,8 @@ export enum NotificationType {
 export enum PatientStatus {
   ACTIVE = 'ACTIVE',
   INACTIVE = 'INACTIVE',
-  RISK = 'RISK'
+  RISK = 'RISK',
+  EMERGENCY = 'EMERGENCY'
 }
 
 export interface PainArea {
@@ -200,9 +202,8 @@ export interface User {
 
 export interface AuthContextType {
   user: User | null;
-  token: string | null;
   isLoading: boolean;
-  login: (token: string, userData: User) => void;
+  login: (userData: User) => void;
   logout: () => void;
 }
 
