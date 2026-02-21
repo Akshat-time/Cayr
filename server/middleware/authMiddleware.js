@@ -27,3 +27,6 @@ export const authorize = (...roles) => {
         next();
     };
 };
+
+// Alias so both `requireRole` and `authorize` work
+export const requireRole = (...roles) => authorize(...roles);

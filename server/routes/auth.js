@@ -2,41 +2,178 @@ import express from 'express';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import User from '../models/User.js';
+import PatientProfile from '../models/PatientProfile.js';
+import DoctorProfile from '../models/DoctorProfile.js';
 
 const router = express.Router();
 
-// Register
-router.post('/register', async (req, res) => {
+// ── Dedicated Doctor Registration ────────────────────────────────────────────
+router.post('/register/doctor', async (req, res) => {
     try {
-        const { name, email, password, role } = req.body;
+        const {
+            name, email, password, phone,
+            licenseNumber, specialization, experienceYears,
+            clinicName, consultationFee,
+            availableDays, availableTimeSlots
+        } = req.body;
+
+        // Required field check
+        if (!name || !email || !password || !phone || !licenseNumber || !specialization || experienceYears === undefined) {
+            return res.status(400).json({ error: 'Name, email, password, phone, license number, specialization, and experience are required.' });
+        }
+
+        // Unique email check
+        const existingEmail = await User.findOne({ email });
+        if (existingEmail) {
+            return res.status(400).json({ error: 'This email is already registered. Please login.' });
+        }
+
+        // Unique license number check
+        const normalizedLicense = licenseNumber.trim().toUpperCase();
+        const existingLicense = await DoctorProfile.findOne({ licenseNumber: normalizedLicense });
+        if (existingLicense) {
+            return res.status(400).json({ error: 'This license number is already registered.' });
+        }
+
         const hashedPassword = await bcrypt.hash(password, 10);
-        const user = new User({ name, email, password: hashedPassword, role });
+
+        // Create base user with role = doctor
+        const user = new User({ name, email, password: hashedPassword, role: 'doctor' });
         await user.save();
 
+        // Create linked DoctorProfile
+        const profile = new DoctorProfile({
+            userId: user._id,
+            phone,
+            licenseNumber: normalizedLicense,
+            specialization,
+            experienceYears: Number(experienceYears),
+            clinicName: clinicName || '',
+            consultationFee: consultationFee ? Number(consultationFee) : 0,
+            availableDays: availableDays || [],
+            availableTimeSlots: availableTimeSlots || [],
+            isVerified: false
+        });
+        await profile.save();
+
+        // Issue JWT immediately
         const token = jwt.sign({ id: user._id, role: user.role }, process.env.JWT_SECRET, { expiresIn: '7d' });
 
         res.cookie('token', token, {
             httpOnly: true,
             secure: process.env.NODE_ENV === 'production',
             sameSite: 'strict',
-            maxAge: 7 * 24 * 60 * 60 * 1000 // 7 days
+            maxAge: 7 * 24 * 60 * 60 * 1000
         });
 
-        res.status(201).json({ message: 'User created', user: { id: user._id, name: user.name, email: user.email, role: user.role } });
+        res.status(201).json({
+            message: 'Doctor account created! Pending verification.',
+            user: { id: user._id, name: user.name, email: user.email, role: user.role }
+        });
     } catch (err) {
         res.status(500).json({ error: err.message });
     }
 });
 
-// Login
+// ── Dedicated Patient Registration ──────────────────────────────────────────
+router.post('/register/patient', async (req, res) => {
+    try {
+        const { name, email, password, phone } = req.body;
+
+        if (!name || !email || !password) {
+            return res.status(400).json({ error: 'Name, email, and password are required.' });
+        }
+
+        // Unique email check
+        const existing = await User.findOne({ email });
+        if (existing) {
+            return res.status(400).json({ error: 'This email is already registered. Please login.' });
+        }
+
+        const hashedPassword = await bcrypt.hash(password, 10);
+
+        // Create base user with role = patient
+        const user = new User({ name, email, password: hashedPassword, role: 'patient' });
+        await user.save();
+
+        // Create linked PatientProfile
+        const profile = new PatientProfile({
+            userId: user._id,
+            phone: phone || ''
+        });
+        await profile.save();
+
+        // Issue JWT immediately so they land on the dashboard
+        const token = jwt.sign({ id: user._id, role: user.role }, process.env.JWT_SECRET, { expiresIn: '7d' });
+
+        res.cookie('token', token, {
+            httpOnly: true,
+            secure: process.env.NODE_ENV === 'production',
+            sameSite: 'strict',
+            maxAge: 7 * 24 * 60 * 60 * 1000
+        });
+
+        res.status(201).json({
+            message: 'Account created!',
+            user: { id: user._id, name: user.name, email: user.email, role: user.role }
+        });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+
+// Register
+router.post('/register', async (req, res) => {
+    try {
+        const { name, email, password, role } = req.body;
+
+        // Validate role
+        const allowedRoles = ['patient', 'doctor', 'admin'];
+        const normalizedRole = (role || 'patient').toLowerCase();
+        if (!allowedRoles.includes(normalizedRole)) {
+            return res.status(400).json({ error: `Invalid role. Must be one of: ${allowedRoles.join(', ')}` });
+        }
+
+        // Check if email already exists
+        const existing = await User.findOne({ email });
+        if (existing) {
+            return res.status(400).json({ error: 'Email already registered. Please login.' });
+        }
+
+        const hashedPassword = await bcrypt.hash(password, 10);
+        const user = new User({ name, email, password: hashedPassword, role: normalizedRole });
+        await user.save();
+
+        res.status(201).json({
+            message: 'Account created successfully! Please login.',
+            user: { id: user._id, name: user.name, email: user.email, role: user.role }
+        });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// Login — strictly enforces role match
 router.post('/login', async (req, res) => {
     try {
-        const { email, password } = req.body;
+        const { email, password, role } = req.body;
+
         const user = await User.findOne({ email });
-        if (!user) return res.status(400).json({ error: 'User not found' });
+        if (!user) return res.status(400).json({ error: 'No account found with this email.' });
 
         const isMatch = await bcrypt.compare(password, user.password);
-        if (!isMatch) return res.status(400).json({ error: 'Invalid credentials' });
+        if (!isMatch) return res.status(400).json({ error: 'Incorrect password.' });
+
+        // Strict role check — if role is sent, it must match the stored role
+        if (role) {
+            const normalizedRole = role.toLowerCase();
+            if (user.role !== normalizedRole) {
+                return res.status(403).json({
+                    error: `Access denied. This account is registered as a ${user.role}. Please use the ${user.role} portal.`
+                });
+            }
+        }
 
         const token = jwt.sign({ id: user._id, role: user.role }, process.env.JWT_SECRET, { expiresIn: '7d' });
 
@@ -44,10 +181,18 @@ router.post('/login', async (req, res) => {
             httpOnly: true,
             secure: process.env.NODE_ENV === 'production',
             sameSite: 'strict',
-            maxAge: 7 * 24 * 60 * 60 * 1000 // 7 days
+            maxAge: 7 * 24 * 60 * 60 * 1000
         });
 
-        res.json({ user: { id: user._id, name: user.name, email: user.email, role: user.role } });
+        // Return a consistent user object with `id` not `_id`
+        res.json({
+            user: {
+                id: user._id,
+                name: user.name,
+                email: user.email,
+                role: user.role
+            }
+        });
     } catch (err) {
         res.status(500).json({ error: err.message });
     }
@@ -63,7 +208,7 @@ router.post('/logout', (req, res) => {
     res.json({ message: 'Logged out successfully' });
 });
 
-// Get Current User
+// Get Current User (/me)
 router.get('/me', async (req, res) => {
     try {
         const token = req.cookies.token;
@@ -71,10 +216,20 @@ router.get('/me', async (req, res) => {
 
         const decoded = jwt.verify(token, process.env.JWT_SECRET);
         const user = await User.findById(decoded.id).select('-password');
-
         if (!user) return res.status(404).json({ error: 'User not found' });
 
-        res.json(user);
+        // Always return `id` not just `_id`
+        res.json({
+            id: user._id,
+            name: user.name,
+            email: user.email,
+            role: user.role,
+            phone: user.phone,
+            specialty: user.specialty,
+            dob: user.dob,
+            gender: user.gender,
+            address: user.address
+        });
     } catch (err) {
         res.status(401).json({ error: 'Invalid token' });
     }
