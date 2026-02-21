@@ -34,12 +34,16 @@ const Layout: React.FC<LayoutProps> = ({
   const doctorNav = ['Overview', 'Appointment', 'Patients', 'Analytics', 'Payments', 'Notifications'];
   const patientNav = ['Dashboard', 'Analytics', 'Payments', 'Notifications', 'Profile'];
 
-  const navItems = user?.role === UserRole.PATIENT ? patientNav : doctorNav;
-  const isDoctor = user?.role === UserRole.DOCTOR;
+  const normalizedRole = (user?.role ?? '').toUpperCase();
+  const navItems = normalizedRole === UserRole.PATIENT ? patientNav : doctorNav;
+  const isDoctor = normalizedRole === UserRole.DOCTOR;
+  const isAdmin = normalizedRole === UserRole.ADMIN;
 
-  const pendingCount = React.useMemo(() => isDoctor
-    ? appointments.filter(a => a.doctorId === user.id && a.status === AppointmentStatus.PENDING).length
-    : 0, [appointments, isDoctor, user?.id]);
+  const pendingCount = React.useMemo(() =>
+    isDoctor
+      ? appointments.filter(a => a.doctorId === user?.id && a.status === AppointmentStatus.PENDING).length
+      : 0,
+    [appointments, isDoctor, user?.id]);
 
   const unreadNotifCount = React.useMemo(() => notifications.filter(n => !n.isRead).length, [notifications]);
 
@@ -59,8 +63,11 @@ const Layout: React.FC<LayoutProps> = ({
           onKeyDown={(e) => (e.key === 'Enter' || e.key === ' ') && onModuleChange(isDoctor ? 'Overview' : 'Dashboard')}
           aria-label="Go to Home Dashboard"
         >
-          <div className="w-10 h-10 bg-[#3b5bfd] rounded-xl flex items-center justify-center text-white font-black text-xl shadow-lg shadow-blue-500/20 group-hover:scale-110 transition-transform">C</div>
-          <span className="hidden lg:block text-2xl font-black tracking-tighter text-[#1a1d1f]">Cayr.</span>
+          <img
+            src="/cayr-logo.png"
+            alt="Cayr Logo"
+            className="scale-90 w-auto object-contain group-hover:scale-105 transition-transform"
+          />
         </div>
 
         <nav className="flex-1 w-full space-y-2" aria-label="Main Navigation">
@@ -72,8 +79,8 @@ const Layout: React.FC<LayoutProps> = ({
                 onClick={() => onModuleChange(item)}
                 aria-current={isActive ? 'page' : undefined}
                 className={`w-full sidebar-item p-3.5 lg:px-4 lg:py-3.5 rounded-2xl flex items-center justify-center lg:justify-start space-x-4 transition-all relative outline-none focus:ring-2 focus:ring-blue-500/40 ${isActive
-                    ? 'active bg-[#3b5bfd] text-white shadow-xl shadow-blue-500/20'
-                    : 'text-[#94a3b8] hover:bg-[#f8fafc] hover:text-[#3b5bfd]'
+                  ? 'active bg-[#3b5bfd] text-white shadow-xl shadow-blue-500/20'
+                  : 'text-[#94a3b8] hover:bg-[#f8fafc] hover:text-[#3b5bfd]'
                   }`}
               >
                 <SidebarIcon name={item} />
@@ -145,7 +152,9 @@ const Layout: React.FC<LayoutProps> = ({
               </div>
               <div className="hidden lg:block text-left">
                 <p className="text-xs font-black text-[#1a1d1f] leading-none uppercase tracking-widest">{user?.name}</p>
-                <p className="text-[9px] font-black text-[#3b5bfd] mt-1.5 uppercase tracking-widest opacity-80">{isDoctor ? (user?.specialty || 'Specialist') : 'Verified Patient'}</p>
+                <p className="text-[9px] font-black text-[#3b5bfd] mt-1.5 uppercase tracking-widest opacity-80">
+                  {isDoctor ? `Verified Doctor${user?.specialty ? ' • ' + user.specialty : ''}` : isAdmin ? 'Administrator' : 'Verified Patient'}
+                </p>
               </div>
               <svg className="w-4 h-4 text-[#94a3b8] hidden lg:block" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7" /></svg>
             </div>

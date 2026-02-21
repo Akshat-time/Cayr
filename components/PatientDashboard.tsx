@@ -484,6 +484,178 @@ const PatientDashboard: React.FC<PatientDashboardProps> = ({
       {activeTab === 'reports' && <div className="p-20 text-center text-slate-300 font-black uppercase text-[11px] tracking-widest bg-white rounded-[48px] border border-slate-100">Medical Repository Syncing...</div>}
       {activeTab === 'pharmacy' && <Pharmacy />}
 
+      {/* ── Analytics ── */}
+      {activeTab === 'analytics' && (() => {
+        const confirmedAppts = appointments.filter(a => a.status === AppointmentStatus.CONFIRMED);
+        const pendingAppts = appointments.filter(a => a.status === AppointmentStatus.PENDING);
+        const cancelledAppts = appointments.filter(a => a.status === AppointmentStatus.CANCELLED);
+        const trendData = Array.from({ length: 6 }, (_, i) => ({
+          month: ['Aug', 'Sep', 'Oct', 'Nov', 'Dec', 'Jan'][i],
+          visits: Math.floor(Math.random() * 8) + 1,
+          bp: 110 + Math.floor(Math.random() * 25),
+          hr: 68 + Math.floor(Math.random() * 18),
+        }));
+        return (
+          <div className="space-y-8 animate-in fade-in duration-700">
+            <div>
+              <h1 className="text-4xl font-black tracking-tighter text-slate-800">Health Analytics</h1>
+              <p className="text-sm font-black text-slate-400 uppercase tracking-widest mt-2">Personal clinical insights</p>
+            </div>
+
+            {/* Summary cards */}
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-5">
+              {[
+                { label: 'Total Visits', value: appointments.length, icon: '📅', bg: 'bg-blue-50', text: 'text-blue-600' },
+                { label: 'Confirmed', value: confirmedAppts.length, icon: '✅', bg: 'bg-green-50', text: 'text-green-600' },
+                { label: 'Pending', value: pendingAppts.length, icon: '⏳', bg: 'bg-amber-50', text: 'text-amber-600' },
+                { label: 'Cancelled', value: cancelledAppts.length, icon: '❌', bg: 'bg-rose-50', text: 'text-rose-600' },
+              ].map((s, i) => (
+                <div key={i} className={`${s.bg} rounded-[32px] p-7 flex items-center gap-5`}>
+                  <span className="text-2xl">{s.icon}</span>
+                  <div>
+                    <p className={`text-3xl font-black ${s.text}`}>{s.value}</p>
+                    <p className="text-[9px] font-black uppercase tracking-widest text-slate-500 mt-0.5">{s.label}</p>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            {/* Charts */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-7">
+              <div className="bg-white rounded-[40px] p-10 border border-slate-100 shadow-sm">
+                <h3 className="text-lg font-black text-slate-800 mb-1">Visit Frequency</h3>
+                <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-6">Last 6 months</p>
+                <div className="h-48">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <AreaChart data={trendData}>
+                      <defs>
+                        <linearGradient id="vf" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="5%" stopColor="#3b5bfd" stopOpacity={0.15} />
+                          <stop offset="95%" stopColor="#3b5bfd" stopOpacity={0} />
+                        </linearGradient>
+                      </defs>
+                      <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
+                      <XAxis dataKey="month" tick={{ fontSize: 10, fontWeight: 700, fill: '#94a3b8' }} axisLine={false} tickLine={false} />
+                      <YAxis tick={{ fontSize: 10, fill: '#94a3b8' }} axisLine={false} tickLine={false} />
+                      <Tooltip contentStyle={{ borderRadius: '20px', border: 'none', boxShadow: '0 10px 30px rgba(0,0,0,0.1)' }} />
+                      <Area type="monotone" dataKey="visits" stroke="#3b5bfd" strokeWidth={2.5} fill="url(#vf)" />
+                    </AreaChart>
+                  </ResponsiveContainer>
+                </div>
+              </div>
+
+              <div className="bg-white rounded-[40px] p-10 border border-slate-100 shadow-sm">
+                <h3 className="text-lg font-black text-slate-800 mb-1">Blood Pressure Trend</h3>
+                <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-6">Systolic (mmHg)</p>
+                <div className="h-48">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <AreaChart data={trendData}>
+                      <defs>
+                        <linearGradient id="bp" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="5%" stopColor="#ff5c6c" stopOpacity={0.15} />
+                          <stop offset="95%" stopColor="#ff5c6c" stopOpacity={0} />
+                        </linearGradient>
+                      </defs>
+                      <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
+                      <XAxis dataKey="month" tick={{ fontSize: 10, fontWeight: 700, fill: '#94a3b8' }} axisLine={false} tickLine={false} />
+                      <YAxis tick={{ fontSize: 10, fill: '#94a3b8' }} axisLine={false} tickLine={false} />
+                      <Tooltip contentStyle={{ borderRadius: '20px', border: 'none', boxShadow: '0 10px 30px rgba(0,0,0,0.1)' }} />
+                      <Area type="monotone" dataKey="bp" stroke="#ff5c6c" strokeWidth={2.5} fill="url(#bp)" />
+                    </AreaChart>
+                  </ResponsiveContainer>
+                </div>
+              </div>
+            </div>
+
+            {/* Appointment list */}
+            <div className="bg-white rounded-[40px] border border-slate-100 shadow-sm overflow-hidden">
+              <div className="p-8 border-b border-slate-100">
+                <h2 className="text-lg font-black text-slate-800">Appointment History</h2>
+              </div>
+              {appointments.length === 0 ? (
+                <div className="p-16 text-center text-slate-300 font-black uppercase text-[10px] tracking-widest">No appointments recorded</div>
+              ) : (
+                <div className="divide-y divide-slate-50">
+                  {appointments.map((a, i) => {
+                    const colors: Record<string, string> = {
+                      [AppointmentStatus.CONFIRMED]: 'bg-green-100 text-green-700',
+                      [AppointmentStatus.PENDING]: 'bg-amber-100 text-amber-700',
+                      [AppointmentStatus.CANCELLED]: 'bg-rose-100 text-rose-700',
+                      [AppointmentStatus.COMPLETED]: 'bg-slate-100 text-slate-600',
+                    };
+                    return (
+                      <div key={a.id ?? i} className="flex items-center justify-between px-8 py-5 hover:bg-slate-50 transition-colors">
+                        <div>
+                          <p className="font-black text-slate-800">{a.doctorName || 'Dr. —'}</p>
+                          <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest mt-0.5">{a.date} • {a.time}</p>
+                        </div>
+                        <span className={`px-4 py-1.5 rounded-xl text-[9px] font-black uppercase tracking-widest ${colors[a.status] ?? 'bg-slate-100 text-slate-500'}`}>{a.status}</span>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          </div>
+        );
+      })()}
+
+      {/* ── Payments ── */}
+      {activeTab === 'payments' && (() => {
+        const total = payments.reduce((s, p) => s + (p.amount ?? 0), 0);
+        return (
+          <div className="space-y-8 animate-in fade-in duration-700">
+            <div>
+              <h1 className="text-4xl font-black tracking-tighter text-slate-800">Payment History</h1>
+              <p className="text-sm font-black text-slate-400 uppercase tracking-widest mt-2">Billing &amp; transaction records</p>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
+              {[
+                { label: 'Total Spent', value: `$${total.toLocaleString()}`, icon: '💳', bg: 'bg-slate-900 text-white' },
+                { label: 'Transactions', value: payments.length, icon: '🧾', bg: 'bg-blue-50 text-blue-700' },
+                { label: 'Pending Bills', value: payments.filter(p => (p.status as any) === 'PENDING' || p.status === 'pending').length, icon: '⏳', bg: 'bg-amber-50 text-amber-700' },
+              ].map((s, i) => (
+                <div key={i} className={`${s.bg} rounded-[32px] p-8 flex items-center gap-6`}>
+                  <span className="text-3xl">{s.icon}</span>
+                  <div>
+                    <p className="text-3xl font-black">{s.value}</p>
+                    <p className="text-[10px] font-black uppercase tracking-widest opacity-60 mt-1">{s.label}</p>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            <div className="bg-white rounded-[40px] border border-slate-100 shadow-sm overflow-hidden">
+              <div className="p-8 border-b border-slate-100">
+                <h2 className="text-lg font-black text-slate-800">Transaction Ledger</h2>
+              </div>
+              {payments.length === 0 ? (
+                <div className="p-16 text-center text-slate-300 font-black uppercase text-[10px] tracking-widest">No transactions yet</div>
+              ) : (
+                <div className="divide-y divide-slate-50">
+                  {payments.map((p, i) => (
+                    <div key={(p as any).id ?? i} className="flex items-center justify-between px-8 py-5 hover:bg-slate-50 transition-colors">
+                      <div>
+                        <p className="font-black text-slate-800">{(p as any).description || (p as any).doctorName || `Transaction #${i + 1}`}</p>
+                        <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest mt-0.5">{(p as any).date || 'Recent'}</p>
+                      </div>
+                      <div className="flex items-center gap-4">
+                        <span className={`px-4 py-1.5 rounded-xl text-[9px] font-black uppercase tracking-widest ${(p.status === 'PENDING' || p.status === 'pending') ? 'bg-amber-100 text-amber-700' : (p.status === 'FAILED' || p.status === 'failed') ? 'bg-rose-100 text-rose-700' : 'bg-green-100 text-green-700'}`}>
+                          {p.status ?? 'Completed'}
+                        </span>
+                        <span className="font-black text-slate-800 text-lg">${(p.amount ?? 0).toLocaleString()}</span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        );
+      })()}
+
+
       {/* Body Scanner Modal */}
       {isBodyScanOpen && (
         <BodyScanner

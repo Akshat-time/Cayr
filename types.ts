@@ -198,6 +198,11 @@ export interface User {
     sms: boolean;
   };
   twoFactorEnabled?: boolean;
+  profilePicture?: string;
+  licenseNumber?: string;
+  experienceYears?: number | string;
+  consultationFee?: number | string;
+  clinicName?: string;
 }
 
 export interface AuthContextType {

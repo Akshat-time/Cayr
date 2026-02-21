@@ -177,17 +177,21 @@ const AuthPage: React.FC = () => {
 
       {/* ── Patient Registration (dedicated form) ── */}
       {flowStep === 'patient_register' && (
-        <PatientRegisterForm
-          onBack={() => setFlowStep('auth')}
-          onSwitchToLogin={() => setFlowStep('auth')}
-        />
+        <div className="fixed inset-0 login-bg overflow-y-auto flex flex-col items-center justify-start py-10 px-4" style={{ zIndex: 50 }}>
+          <PatientRegisterForm
+            onBack={() => setFlowStep('auth')}
+            onSwitchToLogin={() => setFlowStep('auth')}
+          />
+        </div>
       )}
       {/* ── Doctor Registration (dedicated form) ── */}
       {flowStep === 'doctor_register' && (
-        <DoctorRegisterForm
-          onBack={() => setFlowStep('auth')}
-          onSwitchToLogin={() => setFlowStep('auth')}
-        />
+        <div className="fixed inset-0 login-bg overflow-y-auto flex flex-col items-center justify-start py-10 px-4" style={{ zIndex: 50 }}>
+          <DoctorRegisterForm
+            onBack={() => setFlowStep('auth')}
+            onSwitchToLogin={() => setFlowStep('auth')}
+          />
+        </div>
       )}
     </div>
   );
@@ -215,6 +219,7 @@ const ProtectedRoute: React.FC<{ children: React.ReactNode; allowedRoles?: UserR
 // ─── App Content (main router) ────────────────────────────────────────────────
 const AppContent: React.FC = () => {
   const { user, isLoading, login, logout } = useAuth();
+  const navigate = useNavigate();
 
   const [appointments, setAppointments] = useState<Appointment[]>([]);
   const [medicalReports, setMedicalReports] = useState<MedicalReport[]>([]);
@@ -229,6 +234,30 @@ const AppContent: React.FC = () => {
   const [activeCall, setActiveCall] = useState<{ partnerName: string; partnerRole: string } | null>(null);
   const [selectedDetailedPatient, setSelectedDetailedPatient] = useState<PatientRecord | null>(null);
   const [isModalLoading, setIsModalLoading] = useState(false);
+  const [currentModule, setCurrentModule] = useState('Overview');
+  const location = useLocation();
+
+  const handleModuleChange = (module: string) => {
+    if (module === 'Notifications') {
+      navigate('/notifications');
+      return;
+    }
+    if (module === 'Profile') {
+      navigate('/profile');
+      return;
+    }
+    // If currently on a non-dashboard page, navigate back to the role dashboard
+    const role = (user?.role || '').toLowerCase();
+    const dashboardRoute =
+      role === 'doctor' ? '/doctor-dashboard' :
+        role === 'admin' ? '/admin-dashboard' :
+          '/patient-dashboard';
+
+    if (location.pathname !== dashboardRoute) {
+      navigate(dashboardRoute);
+    }
+    setCurrentModule(module);
+  };
 
   // Seed mock payments
   useEffect(() => {
@@ -368,7 +397,14 @@ const AppContent: React.FC = () => {
   }
 
   return (
-    <Layout user={user} onLogout={logout} appointments={appointments} notifications={notifications}>
+    <Layout
+      user={user}
+      onLogout={logout}
+      appointments={appointments}
+      notifications={notifications}
+      currentModule={currentModule}
+      onModuleChange={handleModuleChange}
+    >
       <Routes>
         {/* Smart root redirect */}
         <Route path="/" element={
@@ -388,7 +424,15 @@ const AppContent: React.FC = () => {
               prescriptions={prescriptions} payments={payments}
               onBook={handleBookAppointment} onAddReport={handleAddReport}
               onUploadPrescription={presc => setPrescriptions(prev => [presc, ...prev])}
-              view="dashboard"
+              view={(() => {
+                const map: Record<string, 'dashboard' | 'analytics' | 'payments' | 'reports' | 'reminders' | 'facilities' | 'booking' | 'pharmacy'> = {
+                  'Dashboard': 'dashboard',
+                  'Analytics': 'analytics',
+                  'Payments': 'payments',
+                };
+                return map[currentModule] ?? 'dashboard';
+              })()}
+              onSubViewChange={setCurrentModule}
             />
           </ProtectedRoute>
         } />
@@ -401,6 +445,8 @@ const AppContent: React.FC = () => {
               updateStatus={handleUpdateAppointmentStatus}
               patients={patients} onUpdatePatient={handleUpdatePatient}
               onStartCall={n => setActiveCall({ partnerName: n, partnerRole: 'Patient' })}
+              activeView={currentModule}
+              onViewChange={setCurrentModule}
             />
           </ProtectedRoute>
         } />

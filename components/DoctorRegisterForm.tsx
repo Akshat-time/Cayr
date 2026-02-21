@@ -133,7 +133,7 @@ const DoctorRegisterForm: React.FC<DoctorRegisterFormProps> = ({ onBack, onSwitc
 
     return (
         <div className="w-full max-w-2xl animate-in zoom-in-95 duration-500">
-            <div className="bg-white rounded-[40px] shadow-2xl p-10">
+            <div className="bg-white rounded-[32px] sm:rounded-[40px] shadow-2xl p-6 sm:p-10">
 
                 {/* Header */}
                 <div className="text-center mb-8">
@@ -220,8 +220,8 @@ const DoctorRegisterForm: React.FC<DoctorRegisterFormProps> = ({ onBack, onSwitc
                             {DAYS.map(day => (
                                 <button key={day} type="button" onClick={() => toggleDay(day)}
                                     className={`px-4 py-2 rounded-xl text-xs font-black uppercase tracking-wider transition-all ${availableDays.includes(day)
-                                            ? 'bg-indigo-600 text-white shadow-md'
-                                            : 'bg-slate-100 text-slate-500 hover:bg-slate-200'
+                                        ? 'bg-indigo-600 text-white shadow-md'
+                                        : 'bg-slate-100 text-slate-500 hover:bg-slate-200'
                                         }`}>
                                     {day.slice(0, 3)}
                                 </button>
@@ -236,8 +236,8 @@ const DoctorRegisterForm: React.FC<DoctorRegisterFormProps> = ({ onBack, onSwitc
                             {TIME_SLOTS.map(slot => (
                                 <button key={slot} type="button" onClick={() => toggleSlot(slot)}
                                     className={`px-3 py-2 rounded-xl text-xs font-bold transition-all ${availableTimeSlots.includes(slot)
-                                            ? 'bg-indigo-600 text-white shadow-md'
-                                            : 'bg-slate-100 text-slate-500 hover:bg-slate-200'
+                                        ? 'bg-indigo-600 text-white shadow-md'
+                                        : 'bg-slate-100 text-slate-500 hover:bg-slate-200'
                                         }`}>
                                     {slot}
                                 </button>
