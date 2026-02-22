@@ -53,6 +53,7 @@ const PatientDashboard: React.FC<PatientDashboardProps> = ({
   const [isTyping, setIsTyping] = useState(false);
   const [reportReady, setReportReady] = useState(false);
   const [isGeneratingReport, setIsGeneratingReport] = useState(false);
+  const [intakeData, setIntakeData] = useState<any>(null);
   const [activePainMap, setActivePainMap] = useState<PainArea[]>(() => {
     const saved = sessionStorage.getItem('cayr_pain_map');
     return saved ? JSON.parse(saved) : [];
@@ -81,6 +82,14 @@ const PatientDashboard: React.FC<PatientDashboardProps> = ({
   useEffect(() => {
     sessionStorage.setItem('cayr_pain_map', JSON.stringify(activePainMap));
   }, [activePainMap]);
+
+  // Fetch intake record for health summary card
+  useEffect(() => {
+    fetch('/api/intake/me', { credentials: 'include' })
+      .then(r => r.json())
+      .then(d => { if (d.intake) setIntakeData(d.intake); })
+      .catch(() => null);
+  }, []);
 
   const handleTabChange = (tab: any) => {
     setActiveTab(tab);
@@ -221,6 +230,79 @@ const PatientDashboard: React.FC<PatientDashboardProps> = ({
           </button>
         ))}
       </div>
+
+      {/* Health Profile Summary (from intake) */}
+      {intakeData && intakeData.submittedAt && (
+        <div className="bg-gradient-to-br from-blue-50 to-indigo-50 rounded-[40px] p-8 border border-blue-100">
+          <div className="flex items-center justify-between mb-6">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 bg-[#3b5bfd] rounded-2xl flex items-center justify-center text-white text-lg">🩺</div>
+              <h3 className="text-lg font-black tracking-tight text-slate-900">Health Profile</h3>
+            </div>
+            <button
+              onClick={() => { window.location.href = '/patient-intake'; }}
+              className="text-xs font-bold text-[#3b5bfd] hover:underline">
+              Update Info →
+            </button>
+          </div>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+            {[
+              { label: 'Height', value: intakeData.height ? `${intakeData.height} cm` : '—' },
+              { label: 'Weight', value: intakeData.weight ? `${intakeData.weight} kg` : '—' },
+              { label: 'BMI', value: (intakeData.height && intakeData.weight) ? ((intakeData.weight / Math.pow(intakeData.height / 100, 2)).toFixed(1)) : '—' },
+              { label: 'Blood Type', value: intakeData.bloodType || '—' },
+              { label: 'Blood Pressure', value: intakeData.bloodPressure || '—' },
+              { label: 'Heart Rate', value: intakeData.heartRate ? `${intakeData.heartRate} bpm` : '—' },
+            ].map(item => (
+              <div key={item.label} className="bg-white rounded-2xl p-4 shadow-sm">
+                <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-1">{item.label}</p>
+                <p className="text-lg font-black text-slate-800">{item.value}</p>
+              </div>
+            ))}
+          </div>
+          {/* Allergies + Conditions */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+            {intakeData.allergies?.length > 0 && (
+              <div className="bg-white rounded-2xl p-4">
+                <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2">Allergies</p>
+                <div className="flex flex-wrap gap-1.5">
+                  {intakeData.allergies.map((a: string) => (
+                    <span key={a} className="px-2 py-0.5 bg-red-50 text-red-600 rounded-full text-xs font-semibold">{a}</span>
+                  ))}
+                </div>
+              </div>
+            )}
+            {intakeData.conditions?.length > 0 && (
+              <div className="bg-white rounded-2xl p-4">
+                <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2">Conditions</p>
+                <div className="flex flex-wrap gap-1.5">
+                  {intakeData.conditions.map((c: string) => (
+                    <span key={c} className="px-2 py-0.5 bg-amber-50 text-amber-700 rounded-full text-xs font-semibold">{c}</span>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+          {/* Uploaded documents */}
+          {intakeData.uploadedFiles?.length > 0 && (
+            <div className="bg-white rounded-2xl p-4">
+              <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-3">Uploaded Documents</p>
+              <div className="space-y-2">
+                {intakeData.uploadedFiles.map((f: any) => (
+                  <div key={f._id} className="flex items-center justify-between">
+                    <span className="text-sm text-slate-700 font-medium truncate">{f.fileName || f.title}</span>
+                    <span className={`text-[10px] font-black px-2 py-0.5 rounded-full uppercase tracking-widest ${f.extractionStatus === 'done' ? 'bg-green-50 text-green-600' :
+                        f.extractionStatus === 'processing' ? 'bg-blue-50 text-blue-600 animate-pulse' :
+                          f.extractionStatus === 'failed' ? 'bg-red-50 text-red-500' :
+                            'bg-slate-50 text-slate-400'
+                      }`}>{f.extractionStatus === 'processing' ? '⚙ Processing' : f.extractionStatus === 'done' ? '✓ Ready' : f.extractionStatus === 'failed' ? '✗ Failed' : '⏳ Pending'}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-10">
         <div className="lg:col-span-2 bg-white rounded-[48px] p-10 border border-slate-100 shadow-sm">

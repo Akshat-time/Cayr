@@ -14,7 +14,8 @@ const userSchema = new mongoose.Schema({
     dob: String,
     gender: String,
     address: String,
-    // ... other fields from User interface
+    intakeCompleted: { type: Boolean, default: false },
+    intakeSkipped: { type: Boolean, default: false },
 }, { timestamps: true });
 
 export default mongoose.model('User', userSchema);

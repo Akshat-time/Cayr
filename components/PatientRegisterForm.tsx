@@ -54,7 +54,7 @@ const PatientRegisterForm: React.FC<PatientRegisterFormProps> = ({ onBack, onSwi
 
             // Login user immediately — backend already set the cookie
             login(data.user);
-            navigate('/patient-dashboard');
+            navigate('/patient-intake');
         } catch (err) {
             setError('Network error. Please try again.');
         } finally {

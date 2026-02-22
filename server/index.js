@@ -9,6 +9,7 @@ import authRoutes from './routes/auth.js';
 import usersRoutes from './routes/users.js';
 import reportsRoutes from './routes/reports.js';
 import appointmentsRoutes from './routes/appointments.js';
+import intakeRoutes from './routes/intake.js';
 
 dotenv.config();
 
@@ -66,6 +67,7 @@ app.use('/api/auth', strictAuthLimiter, authRoutes);
 app.use('/api/users', usersRoutes);
 app.use('/api/reports', reportsRoutes);
 app.use('/api/appointments', appointmentsRoutes);
+app.use('/api/intake', intakeRoutes);
 
 // Health Check
 app.get('/api/health', (req, res) => {

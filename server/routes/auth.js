@@ -115,7 +115,14 @@ router.post('/register/patient', async (req, res) => {
 
         res.status(201).json({
             message: 'Account created!',
-            user: { id: user._id, name: user.name, email: user.email, role: user.role }
+            user: {
+                id: user._id,
+                name: user.name,
+                email: user.email,
+                role: user.role,
+                intakeCompleted: user.intakeCompleted || false,
+                intakeSkipped: user.intakeSkipped || false
+            }
         });
     } catch (err) {
         res.status(500).json({ error: err.message });
@@ -190,7 +197,9 @@ router.post('/login', async (req, res) => {
                 id: user._id,
                 name: user.name,
                 email: user.email,
-                role: user.role
+                role: user.role,
+                intakeCompleted: user.intakeCompleted || false,
+                intakeSkipped: user.intakeSkipped || false
             }
         });
     } catch (err) {
@@ -228,7 +237,9 @@ router.get('/me', async (req, res) => {
             specialty: user.specialty,
             dob: user.dob,
             gender: user.gender,
-            address: user.address
+            address: user.address,
+            intakeCompleted: user.intakeCompleted || false,
+            intakeSkipped: user.intakeSkipped || false
         });
     } catch (err) {
         res.status(401).json({ error: 'Invalid token' });

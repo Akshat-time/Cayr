@@ -13,6 +13,7 @@ import TransactionHistory from './components/TransactionHistory';
 import PatientDetailModal from './components/PatientDetailModal';
 import PatientRegisterForm from './components/PatientRegisterForm';
 import DoctorRegisterForm from './components/DoctorRegisterForm';
+import PatientIntakeForm from './components/PatientIntakeForm';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import {
   User, UserRole, Appointment, AppointmentStatus,
@@ -51,7 +52,11 @@ const AuthPage: React.FC = () => {
       const r = (data.user.role || '').toLowerCase();
       if (r === 'doctor') navigate('/doctor-dashboard');
       else if (r === 'admin') navigate('/admin-dashboard');
-      else navigate('/patient-dashboard');
+      else {
+        // Patients: go to intake if not yet completed and not skipped
+        const needsIntake = !data.user.intakeCompleted && !data.user.intakeSkipped;
+        navigate(needsIntake ? '/patient-intake' : '/patient-dashboard');
+      }
     } catch (err: any) {
       setAuthError('Network error. Please try again.');
     }
@@ -396,6 +401,23 @@ const AppContent: React.FC = () => {
     );
   }
 
+  // ── Intake form: render WITHOUT the sidebar Layout ─────────────────────────
+  if (user && (user.role || '').toLowerCase() === 'patient' &&
+    location.pathname === '/patient-intake') {
+    return (
+      <Routes>
+        <Route path="/patient-intake" element={
+          <PatientIntakeForm
+            user={user}
+            onComplete={() => { window.location.href = '/patient-dashboard'; }}
+            onSkip={() => { window.location.href = '/patient-dashboard'; }}
+          />
+        } />
+        <Route path="*" element={<Navigate to="/patient-intake" replace />} />
+      </Routes>
+    );
+  }
+
   return (
     <Layout
       user={user}
@@ -412,7 +434,9 @@ const AppContent: React.FC = () => {
             const r = (user.role || '').toLowerCase();
             if (r === 'doctor') return <Navigate to="/doctor-dashboard" replace />;
             if (r === 'admin') return <Navigate to="/admin-dashboard" replace />;
-            return <Navigate to="/patient-dashboard" replace />;
+            // Patients: check intake status
+            const needsIntake = !(user as any).intakeCompleted && !(user as any).intakeSkipped;
+            return <Navigate to={needsIntake ? '/patient-intake' : '/patient-dashboard'} replace />;
           })()
         } />
 
