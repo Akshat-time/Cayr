@@ -15,6 +15,7 @@ import {
 import MultilingualBridge from './MultilingualBridge';
 import BodyScanner from './BodyScanner';
 import Pharmacy from './Pharmacy';
+import ClinicLabFinder from './ClinicLabFinder';
 
 interface ChatMessage { role: 'user' | 'ai'; text: string; }
 interface LiveFacility {
@@ -59,11 +60,6 @@ const PatientDashboard: React.FC<PatientDashboardProps> = ({
     return saved ? JSON.parse(saved) : [];
   });
 
-  const [liveFacilities, setLiveFacilities] = useState<LiveFacility[]>([]);
-  const [isSearchingFacilities, setIsSearchingFacilities] = useState(false);
-  const [facilityCategory, setFacilityCategory] = useState('Clinics');
-  const [userLocation, setUserLocation] = useState<{ lat: number, lng: number } | null>(null);
-
   const [selectedDoctorId, setSelectedDoctorId] = useState<string | null>(null);
   const [bookingDate, setBookingDate] = useState('');
   const [bookingTime, setBookingTime] = useState('');
@@ -74,9 +70,6 @@ const PatientDashboard: React.FC<PatientDashboardProps> = ({
 
   useEffect(() => {
     setActiveTab(initialView);
-    if (initialView === 'facilities' && liveFacilities.length === 0) {
-      handleFetchLiveFacilities('medical clinics');
-    }
   }, [initialView]);
 
   useEffect(() => {
@@ -94,54 +87,6 @@ const PatientDashboard: React.FC<PatientDashboardProps> = ({
   const handleTabChange = (tab: any) => {
     setActiveTab(tab);
     onSubViewChange?.(tab);
-  };
-
-  useEffect(() => {
-    if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
-  }, [chatHistory, isTyping]);
-
-  const handleFetchLiveFacilities = async (categoryQuery: string) => {
-    setIsSearchingFacilities(true);
-    if (!navigator.geolocation) {
-      alert("Geolocation required to find facilities.");
-      setIsSearchingFacilities(false);
-      return;
-    }
-
-    navigator.geolocation.getCurrentPosition(async (pos) => {
-      const { latitude, longitude } = pos.coords;
-      setUserLocation({ lat: latitude, lng: longitude });
-
-      try {
-        const result = await searchNearbyClinics(latitude, longitude, categoryQuery);
-        // Process Gemini grounding chunks into usable facility objects
-        const mapped = (result.grounding || [])
-          .filter(c => c.maps)
-          .map((c, idx) => ({
-            name: c.maps!.title || "Healthcare Facility",
-            uri: c.maps!.uri || "#",
-            type: categoryQuery,
-            // Random offsets for visual map representation
-            latOffset: (Math.random() - 0.5) * 0.05,
-            lngOffset: (Math.random() - 0.5) * 0.05,
-            clinicalContext: result.text.split('\n').find(l => l.includes(c.maps!.title || '')) || "Primary Healthcare Service",
-            address: "Located nearby " + (idx + 1) * 0.5 + " miles away"
-          }));
-        setLiveFacilities(mapped);
-      } catch (e) {
-        console.error("Map fetch error:", e);
-      } finally {
-        setIsSearchingFacilities(false);
-      }
-    }, (err) => {
-      console.error("Geo error:", err);
-      setIsSearchingFacilities(false);
-    });
-  };
-
-  const handleCategoryFilter = (cat: string) => {
-    setFacilityCategory(cat);
-    handleFetchLiveFacilities(`top-rated ${cat.toLowerCase()}`);
   };
 
   const handleSendMessage = async (e: React.FormEvent) => {
@@ -292,9 +237,9 @@ const PatientDashboard: React.FC<PatientDashboardProps> = ({
                   <div key={f._id} className="flex items-center justify-between">
                     <span className="text-sm text-slate-700 font-medium truncate">{f.fileName || f.title}</span>
                     <span className={`text-[10px] font-black px-2 py-0.5 rounded-full uppercase tracking-widest ${f.extractionStatus === 'done' ? 'bg-green-50 text-green-600' :
-                        f.extractionStatus === 'processing' ? 'bg-blue-50 text-blue-600 animate-pulse' :
-                          f.extractionStatus === 'failed' ? 'bg-red-50 text-red-500' :
-                            'bg-slate-50 text-slate-400'
+                      f.extractionStatus === 'processing' ? 'bg-blue-50 text-blue-600 animate-pulse' :
+                        f.extractionStatus === 'failed' ? 'bg-red-50 text-red-500' :
+                          'bg-slate-50 text-slate-400'
                       }`}>{f.extractionStatus === 'processing' ? '⚙ Processing' : f.extractionStatus === 'done' ? '✓ Ready' : f.extractionStatus === 'failed' ? '✗ Failed' : '⏳ Pending'}</span>
                   </div>
                 ))}
@@ -414,128 +359,7 @@ const PatientDashboard: React.FC<PatientDashboardProps> = ({
   );
 
   const renderFacilities = () => (
-    <div className="space-y-10 animate-in fade-in duration-500">
-      <div className="flex flex-col md:flex-row justify-between items-center gap-6">
-        <div>
-          <h2 className="text-3xl font-black tracking-tight flex items-center text-slate-900">Clinic & Labs Finder {isSearchingFacilities && <div className="ml-4 w-2 h-2 bg-blue-500 rounded-full animate-ping"></div>}</h2>
-          <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mt-2">Real-time Verified Healthcare Network</p>
-        </div>
-        <div className="flex bg-white p-1.5 rounded-2xl border border-slate-100 shadow-sm overflow-x-auto scrollbar-hide">
-          {['Clinics', 'Labs', 'Hospitals', 'Emergency'].map(cat => (
-            <button
-              key={cat}
-              onClick={() => handleCategoryFilter(cat)}
-              className={`px-6 py-3 rounded-xl text-[9px] font-black uppercase tracking-widest transition-all ${facilityCategory === cat ? 'bg-[#3b5bfd] text-white shadow-lg' : 'text-slate-400 hover:bg-slate-50 hover:text-slate-800'}`}
-            >
-              {cat}
-            </button>
-          ))}
-        </div>
-      </div>
-
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-10">
-        <div className="lg:col-span-2 bg-white rounded-[48px] border border-slate-100 shadow-sm overflow-hidden h-[600px] relative group">
-          {/* Digital Map Representation */}
-          <div className="absolute inset-0 bg-[#f8fafc] opacity-50 pointer-events-none bg-[radial-gradient(#cbd5e1_1px,transparent_1px)] [background-size:20px_20px]"></div>
-
-          {/* Interactive Area */}
-          <div className="w-full h-full relative p-10 flex items-center justify-center">
-            {/* Simulated User Location Marker */}
-            <div className="absolute w-12 h-12 bg-blue-500/20 rounded-full flex items-center justify-center animate-pulse border-2 border-blue-400/30">
-              <div className="w-4 h-4 bg-blue-600 rounded-full border-2 border-white shadow-lg"></div>
-              <div className="absolute -top-8 bg-slate-900 text-white text-[8px] font-black uppercase px-2 py-1 rounded">You</div>
-            </div>
-
-            {/* Satellite Scanning HUD */}
-            <div className="absolute top-8 left-8 p-4 bg-white/60 backdrop-blur-md rounded-2xl border border-slate-100 shadow-sm z-10 pointer-events-none">
-              <p className="text-[8px] font-black uppercase tracking-widest text-slate-400">Satellite Status</p>
-              <p className={`text-[10px] font-black uppercase mt-1 ${isSearchingFacilities ? 'text-blue-500' : 'text-green-500'}`}>
-                {isSearchingFacilities ? "Scanning Frequencies..." : "Linked • Active Grid"}
-              </p>
-            </div>
-
-            {/* Facility Markers */}
-            {!isSearchingFacilities && liveFacilities.map((f, i) => (
-              <div
-                key={i}
-                className="absolute cursor-pointer hover:scale-110 transition-transform group/marker"
-                style={{
-                  top: `${50 + (f.latOffset || 0) * 1000}%`,
-                  left: `${50 + (f.lngOffset || 0) * 1000}%`
-                }}
-                onClick={() => window.open(f.uri, '_blank')}
-              >
-                <div className="w-10 h-10 bg-white rounded-2xl border-2 border-[#3b5bfd] shadow-xl flex items-center justify-center text-lg relative z-10">
-                  {facilityCategory === 'Labs' ? '🧪' : facilityCategory === 'Hospitals' ? '🏥' : '🩺'}
-                </div>
-                <div className="absolute top-12 left-1/2 -translate-x-1/2 bg-slate-900 text-white text-[9px] font-black px-3 py-1.5 rounded-lg opacity-0 group-hover/marker:opacity-100 transition-opacity whitespace-nowrap z-20 shadow-2xl">
-                  {f.name}
-                </div>
-                <div className="absolute inset-0 bg-[#3b5bfd] rounded-2xl animate-ping opacity-10"></div>
-              </div>
-            ))}
-
-            {isSearchingFacilities && (
-              <div className="flex flex-col items-center justify-center text-center space-y-4">
-                <div className="w-16 h-16 border-4 border-[#3b5bfd] border-t-transparent rounded-full animate-spin"></div>
-                <p className="text-[10px] font-black uppercase tracking-[0.3em] text-slate-400">Synchronizing Spatial Data...</p>
-              </div>
-            )}
-          </div>
-
-          <div className="absolute bottom-6 right-6 flex space-x-2">
-            <div className="px-4 py-2 bg-white/80 backdrop-blur-md rounded-xl text-[8px] font-black text-slate-400 uppercase border border-slate-100">Zoom: Adaptive</div>
-            <div className="px-4 py-2 bg-white/80 backdrop-blur-md rounded-xl text-[8px] font-black text-slate-400 uppercase border border-slate-100">Layer: Bio-Clinical</div>
-          </div>
-        </div>
-
-        <div className="bg-white rounded-[48px] border border-slate-100 shadow-sm overflow-hidden flex flex-col h-[600px]">
-          <div className="p-8 border-b border-slate-50 bg-slate-50/50 flex items-center justify-between">
-            <div>
-              <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">Results for {facilityCategory}</span>
-              <p className="text-[9px] font-bold text-slate-400 mt-1">Found in your immediate vicinity</p>
-            </div>
-            {liveFacilities.length > 0 && <span className="bg-blue-100 text-blue-600 px-3 py-1 rounded-lg text-[9px] font-black">{liveFacilities.length} Results</span>}
-          </div>
-          <div className="flex-1 overflow-y-auto p-6 space-y-5 scrollbar-hide">
-            {isSearchingFacilities ? (
-              Array.from({ length: 4 }).map((_, i) => (
-                <div key={i} className="p-6 bg-slate-50/50 rounded-3xl border border-transparent animate-pulse space-y-4">
-                  <div className="h-4 bg-slate-200 rounded w-3/4"></div>
-                  <div className="h-3 bg-slate-100 rounded w-1/2"></div>
-                  <div className="h-3 bg-slate-100 rounded w-2/3"></div>
-                </div>
-              ))
-            ) : liveFacilities.length === 0 ? (
-              <div className="h-full flex flex-col items-center justify-center text-center opacity-30 p-10">
-                <div className="text-6xl mb-6">🛰️</div>
-                <p className="text-[10px] font-black uppercase tracking-widest leading-relaxed">System Ready • Select category or update location to begin scanning verified clinical endpoints.</p>
-              </div>
-            ) : (
-              liveFacilities.map((f, i) => (
-                <article key={i} className="p-6 bg-white border border-slate-100 rounded-3xl hover:border-[#3b5bfd] hover:shadow-lg transition-all group cursor-pointer" onClick={() => window.open(f.uri, '_blank')}>
-                  <div className="flex justify-between items-start mb-4">
-                    <h4 className="font-black text-slate-800 text-base leading-tight tracking-tight group-hover:text-[#3b5bfd] transition-colors">{f.name}</h4>
-                    <span className="text-[8px] font-black text-slate-300 uppercase bg-slate-50 px-2 py-1 rounded">#{i + 1}</span>
-                  </div>
-                  <div className="flex items-center space-x-3 text-[10px] text-slate-500 font-bold mb-4">
-                    <span className="flex items-center"><span className="mr-1">📍</span> {f.address}</span>
-                  </div>
-                  <p className="text-[10px] font-medium text-slate-400 italic line-clamp-2 bg-slate-50/50 p-3 rounded-xl border border-slate-100">"{f.clinicalContext}"</p>
-                  <div className="mt-5 pt-4 border-t border-slate-50 flex justify-between items-center">
-                    <span className="text-[9px] font-black text-[#3b5bfd] uppercase tracking-widest group-hover:translate-x-1 transition-transform">Visit Profile ➜</span>
-                    <div className="flex space-x-2">
-                      <div className="w-8 h-8 rounded-lg bg-blue-50 flex items-center justify-center text-xs">📞</div>
-                      <div className="w-8 h-8 rounded-lg bg-blue-50 flex items-center justify-center text-xs">✉️</div>
-                    </div>
-                  </div>
-                </article>
-              ))
-            )}
-          </div>
-        </div>
-      </div>
-    </div>
+    <ClinicLabFinder />
   );
 
   return (

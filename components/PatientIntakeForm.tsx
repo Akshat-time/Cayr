@@ -1,4 +1,4 @@
-import React, { useState, useRef, useCallback } from 'react';
+import React, { useState, useRef, useCallback, useEffect } from 'react';
 import { User } from '../types';
 
 interface PatientIntakeFormProps {
@@ -10,17 +10,14 @@ interface PatientIntakeFormProps {
 type Step = 1 | 2 | 3;
 
 const BLOOD_TYPES = ['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-', 'Unknown'];
-
 const COMMON_CONDITIONS = [
     'Diabetes', 'Hypertension', 'Asthma', 'Heart Disease', 'Thyroid Disorder',
     'Arthritis', 'Migraine', 'Depression / Anxiety', 'COPD', 'Kidney Disease',
 ];
-
 const COMMON_ALLERGIES = [
     'Penicillin', 'Aspirin', 'Sulfa drugs', 'Ibuprofen', 'Latex',
     'Pollen', 'Dust / Mites', 'Peanuts', 'Shellfish', 'Dairy',
 ];
-
 const ALLOWED_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'application/pdf'];
 
 // ── Tag-input ─────────────────────────────────────────────────────────────────
@@ -80,9 +77,13 @@ const inputCls = "w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-x
 const PatientIntakeForm: React.FC<PatientIntakeFormProps> = ({ user, onComplete, onSkip }) => {
     const [step, setStep] = useState<Step>(1);
     const [isSubmitting, setIsSubmitting] = useState(false);
+    const [isSavingDraft, setIsSavingDraft] = useState(false);
     const [isSkipping, setIsSkipping] = useState(false);
+    const [isLoadingDraft, setIsLoadingDraft] = useState(true);
     const [error, setError] = useState('');
+    const [draftSavedAt, setDraftSavedAt] = useState<string | null>(null);
     const [isDragging, setIsDragging] = useState(false);
+    const [existingStatus, setExistingStatus] = useState<'draft' | 'submitted' | 'skipped' | null>(null);
 
     // Step 1
     const [height, setHeight] = useState('');
@@ -101,6 +102,37 @@ const PatientIntakeForm: React.FC<PatientIntakeFormProps> = ({ user, onComplete,
     const [symptoms, setSymptoms] = useState('');
     const [files, setFiles] = useState<File[]>([]);
     const fileInputRef = useRef<HTMLInputElement>(null);
+
+    // ── Fetch existing draft on mount ─────────────────────────────────────────
+    useEffect(() => {
+        const fetchDraft = async () => {
+            try {
+                const res = await fetch('/api/intake/me', { credentials: 'include' });
+                const data = await res.json();
+                if (data.intake) {
+                    const d = data.intake;
+                    setExistingStatus(d.status);
+                    if (d.status === 'draft' || d.status === 'submitted') {
+                        if (d.height) setHeight(String(d.height));
+                        if (d.weight) setWeight(String(d.weight));
+                        if (d.bloodPressure) setBloodPressure(d.bloodPressure);
+                        if (d.heartRate) setHeartRate(String(d.heartRate));
+                        if (d.bloodType) setBloodType(d.bloodType);
+                        if (d.allergies?.length) setAllergies(d.allergies);
+                        if (d.conditions?.length) setConditions(d.conditions);
+                        if (d.currentMedications?.length) setMedications(d.currentMedications);
+                        if (d.medicalHistory) setMedicalHistory(d.medicalHistory);
+                        if (d.symptoms) setSymptoms(d.symptoms);
+                        if (d.lastModifiedAt) {
+                            setDraftSavedAt(new Date(d.lastModifiedAt).toLocaleString());
+                        }
+                    }
+                }
+            } catch { /* silent */ }
+            finally { setIsLoadingDraft(false); }
+        };
+        fetchDraft();
+    }, []);
 
     // ── File helpers ──────────────────────────────────────────────────────────
     const addFiles = useCallback((incoming: FileList | File[]) => {
@@ -124,6 +156,36 @@ const PatientIntakeForm: React.FC<PatientIntakeFormProps> = ({ user, onComplete,
         addFiles(e.dataTransfer.files);
     };
 
+    // ── Save draft to server ──────────────────────────────────────────────────
+    const handleSaveDraft = async () => {
+        setIsSavingDraft(true);
+        setError('');
+        try {
+            const body = {
+                height, weight, bloodPressure, heartRate, bloodType,
+                allergies: JSON.stringify(allergies),
+                conditions: JSON.stringify(conditions),
+                currentMedications: JSON.stringify(medications),
+                medicalHistory, symptoms,
+                status: 'draft',
+            };
+            const res = await fetch('/api/intake/save-draft', {
+                method: 'PATCH',
+                credentials: 'include',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(body),
+            });
+            const data = await res.json();
+            if (!res.ok) throw new Error(data.error || 'Save failed');
+            setDraftSavedAt(new Date().toLocaleString());
+            setExistingStatus('draft');
+        } catch (err: any) {
+            setError(err.message);
+        } finally {
+            setIsSavingDraft(false);
+        }
+    };
+
     // ── Submit: send as FormData (multipart) ─────────────────────────────────
     const handleSubmit = async () => {
         setIsSubmitting(true); setError('');
@@ -144,7 +206,7 @@ const PatientIntakeForm: React.FC<PatientIntakeFormProps> = ({ user, onComplete,
             const res = await fetch('/api/intake/submit', {
                 method: 'POST',
                 credentials: 'include',
-                body: fd,   // No Content-Type header: browser sets it with boundary automatically
+                body: fd,
             });
             const data = await res.json();
             if (!res.ok) throw new Error(data.error || 'Submission failed');
@@ -164,6 +226,17 @@ const PatientIntakeForm: React.FC<PatientIntakeFormProps> = ({ user, onComplete,
 
     const stepLabels = ['Vitals', 'Medical Background', 'Symptoms & Files'];
 
+    if (isLoadingDraft) {
+        return (
+            <div className="min-h-screen bg-gradient-to-br from-[#f0f4ff] via-[#e8f0fe] to-[#f4f7fe] flex items-center justify-center">
+                <div className="flex flex-col items-center gap-4">
+                    <div className="w-12 h-12 border-4 border-[#3b5bfd] border-t-transparent rounded-full animate-spin" />
+                    <p className="text-slate-500 font-semibold text-sm">Loading your intake data…</p>
+                </div>
+            </div>
+        );
+    }
+
     return (
         <div className="min-h-screen bg-gradient-to-br from-[#f0f4ff] via-[#e8f0fe] to-[#f4f7fe] flex items-center justify-center p-4">
             <div className="w-full max-w-2xl bg-white rounded-3xl shadow-2xl overflow-hidden">
@@ -176,6 +249,9 @@ const PatientIntakeForm: React.FC<PatientIntakeFormProps> = ({ user, onComplete,
                             <p className="text-blue-200 text-sm mt-0.5">
                                 Welcome, {user.name?.split(' ')[0] || 'there'}! Let's set up your health profile.
                             </p>
+                            {existingStatus === 'draft' && draftSavedAt && (
+                                <p className="text-blue-200/70 text-xs mt-1">📋 Resuming draft saved {draftSavedAt}</p>
+                            )}
                         </div>
                         <button onClick={handleSkip} disabled={isSkipping}
                             className="text-blue-200 hover:text-white text-sm font-semibold underline underline-offset-2 transition disabled:opacity-50">
@@ -192,7 +268,7 @@ const PatientIntakeForm: React.FC<PatientIntakeFormProps> = ({ user, onComplete,
                         </div>
                         <div className="h-2 bg-blue-400/40 rounded-full overflow-hidden">
                             <div className="h-full bg-white rounded-full transition-all duration-500"
-                                style={{ width: `${step === 1 ? 0 : step === 2 ? 50 : 100}%` }} />
+                                style={{ width: `${step === 1 ? 5 : step === 2 ? 50 : 100}%` }} />
                         </div>
                     </div>
                 </div>
@@ -278,7 +354,6 @@ const PatientIntakeForm: React.FC<PatientIntakeFormProps> = ({ user, onComplete,
                                     <p className="text-slate-400 text-xs mt-1">PDF, JPG, PNG, WEBP — up to 5 MB each</p>
                                 </div>
 
-                                {/* File list */}
                                 {files.length > 0 && (
                                     <ul className="mt-3 space-y-2">
                                         {files.map((f, i) => (
@@ -309,6 +384,13 @@ const PatientIntakeForm: React.FC<PatientIntakeFormProps> = ({ user, onComplete,
                         </div>
                     )}
 
+                    {/* Draft save toast */}
+                    {draftSavedAt && !error && (
+                        <div className="flex items-center gap-2 px-4 py-2 bg-green-50 border border-green-200 rounded-xl text-green-700 text-xs font-semibold animate-in fade-in duration-300">
+                            ✓ Draft saved — {draftSavedAt}
+                        </div>
+                    )}
+
                     {/* Navigation */}
                     <div className="flex items-center justify-between pt-2 border-t border-slate-100">
                         <button type="button" onClick={() => setStep(s => Math.max(1, s - 1) as Step)}
@@ -323,25 +405,34 @@ const PatientIntakeForm: React.FC<PatientIntakeFormProps> = ({ user, onComplete,
                             ))}
                         </div>
 
-                        {step < 3 ? (
-                            <button type="button" onClick={() => setStep(s => Math.min(3, s + 1) as Step)}
-                                className="px-6 py-3 bg-[#3b5bfd] text-white rounded-2xl font-bold text-sm shadow-lg shadow-blue-500/20 hover:bg-blue-700 transition">
-                                Next →
-                            </button>
-                        ) : (
-                            <button type="button" onClick={handleSubmit} disabled={isSubmitting}
-                                className="px-6 py-3 bg-[#3b5bfd] text-white rounded-2xl font-bold text-sm shadow-lg shadow-blue-500/20 hover:bg-blue-700 transition disabled:opacity-60 flex items-center gap-2">
-                                {isSubmitting ? (
-                                    <>
-                                        <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
-                                            <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" className="opacity-25" />
-                                            <path fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" className="opacity-75" />
-                                        </svg>
-                                        Saving…
-                                    </>
-                                ) : '✓ Submit & Go to Dashboard'}
-                            </button>
-                        )}
+                        <div className="flex items-center gap-2">
+                            {/* Save Draft button — shown on steps 1 and 2 */}
+                            {step < 3 && (
+                                <button type="button" onClick={handleSaveDraft} disabled={isSavingDraft}
+                                    className="px-4 py-3 rounded-2xl text-slate-500 border border-slate-200 font-semibold text-xs hover:bg-slate-50 transition disabled:opacity-50">
+                                    {isSavingDraft ? '💾 Saving…' : '💾 Save Draft'}
+                                </button>
+                            )}
+                            {step < 3 ? (
+                                <button type="button" onClick={() => setStep(s => Math.min(3, s + 1) as Step)}
+                                    className="px-6 py-3 bg-[#3b5bfd] text-white rounded-2xl font-bold text-sm shadow-lg shadow-blue-500/20 hover:bg-blue-700 transition">
+                                    Next →
+                                </button>
+                            ) : (
+                                <button type="button" onClick={handleSubmit} disabled={isSubmitting}
+                                    className="px-6 py-3 bg-[#3b5bfd] text-white rounded-2xl font-bold text-sm shadow-lg shadow-blue-500/20 hover:bg-blue-700 transition disabled:opacity-60 flex items-center gap-2">
+                                    {isSubmitting ? (
+                                        <>
+                                            <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
+                                                <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" className="opacity-25" />
+                                                <path fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" className="opacity-75" />
+                                            </svg>
+                                            Saving…
+                                        </>
+                                    ) : '✓ Submit & Go to Dashboard'}
+                                </button>
+                            )}
+                        </div>
                     </div>
                 </div>
             </div>

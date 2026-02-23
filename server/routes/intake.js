@@ -19,6 +19,13 @@ const requireAuth = (req, res, next) => {
     }
 };
 
+// ── Helper: parse JSON-stringified arrays ─────────────────────────────────────
+const parseArr = (val) => {
+    if (!val) return [];
+    if (Array.isArray(val)) return val;
+    try { return JSON.parse(val); } catch { return val.split(',').map(s => s.trim()).filter(Boolean); }
+};
+
 // ── GET /api/intake/me ─────────────────────────────────────────────────────────
 router.get('/me', requireAuth, async (req, res) => {
     try {
@@ -28,6 +35,69 @@ router.get('/me', requireAuth, async (req, res) => {
     } catch (err) {
         console.error('GET /api/intake/me error:', err);
         res.status(500).json({ error: 'Failed to fetch intake record' });
+    }
+});
+
+// ── PATCH /api/intake/save-draft ───────────────────────────────────────────────
+// Unified endpoint for saving drafts AND updating submitted intakes.
+// Accepts partial JSON body — only provided fields are updated.
+// Status is determined by the caller: 'draft' (default) or 'submitted'.
+router.patch('/save-draft', requireAuth, async (req, res) => {
+    try {
+        const {
+            height, weight, bloodPressure, heartRate, bloodType,
+            allergies, conditions, currentMedications,
+            medicalHistory, symptoms,
+            status: requestedStatus,
+        } = req.body;
+
+        // Build only the fields that were actually sent
+        const update = { lastModifiedAt: new Date() };
+
+        if (height !== undefined) update.height = parseFloat(height) || 0;
+        if (weight !== undefined) update.weight = parseFloat(weight) || 0;
+        if (bloodPressure !== undefined) update.bloodPressure = bloodPressure;
+        if (heartRate !== undefined) update.heartRate = parseFloat(heartRate) || 0;
+        if (bloodType !== undefined) update.bloodType = bloodType;
+        if (allergies !== undefined) update.allergies = parseArr(allergies);
+        if (conditions !== undefined) update.conditions = parseArr(conditions);
+        if (currentMedications !== undefined) update.currentMedications = parseArr(currentMedications);
+        if (medicalHistory !== undefined) update.medicalHistory = medicalHistory;
+        if (symptoms !== undefined) update.symptoms = symptoms;
+
+        // Status: caller may pass 'draft' or keep current; never demote 'submitted' back to 'draft'
+        // If current status is submitted and caller sends 'draft', keep submitted (update is still allowed)
+        const existing = await IntakeRecord.findOne({ userId: req.user.id });
+        const currentStatus = existing?.status ?? 'draft';
+        if (requestedStatus === 'submitted') {
+            update.status = 'submitted';
+            update.submittedAt = new Date();
+            update.skippedAt = null;
+        } else if (currentStatus !== 'submitted') {
+            update.status = 'draft';
+        }
+        // if currentStatus is 'submitted' and no new status requested → leave as submitted
+
+        const intake = await IntakeRecord.findOneAndUpdate(
+            { userId: req.user.id },
+            { $set: update, $setOnInsert: { userId: req.user.id } },
+            { upsert: true, new: true, runValidators: true }
+        ).populate('uploadedFiles', 'fileName title extractionStatus mimeType createdAt');
+
+        // Recalculate and persist progress
+        const progress = intake.calcProgress();
+        intake.progressPercentage = progress;
+        await intake.save();
+
+        // Update User.intakeCompleted / intakeSkipped flags for backward compat
+        if (update.status === 'submitted') {
+            await User.findByIdAndUpdate(req.user.id, { intakeCompleted: true, intakeSkipped: false });
+        }
+
+        res.json({ success: true, intake, progressPercentage: progress, message: 'Draft saved' });
+    } catch (err) {
+        console.error('PATCH /api/intake/save-draft error:', err);
+        res.status(500).json({ error: 'Failed to save draft' });
     }
 });
 
@@ -46,12 +116,6 @@ router.post(
                 medicalHistory, symptoms
             } = req.body;
 
-            // Helper: parse JSON-stringified arrays sent as form fields
-            const parseArr = (val) => {
-                if (!val) return [];
-                try { return JSON.parse(val); } catch { return val.split(',').map(s => s.trim()).filter(Boolean); }
-            };
-
             // Save each uploaded file as a MedicalReport document
             const uploadedFileIds = [];
             if (req.files && req.files.length > 0) {
@@ -61,7 +125,7 @@ router.post(
                         patientId: req.user.id,
                         title: file.originalname,
                         fileName: file.originalname,
-                        fileUrl: `data:${file.mimetype};base64,${base64.slice(0, 50)}...`, // preview URL stub
+                        fileUrl: `data:${file.mimetype};base64,${base64.slice(0, 50)}...`,
                         fileData: base64,
                         mimeType: file.mimetype,
                         uploadedBy: 'patient',
@@ -71,11 +135,12 @@ router.post(
                 }
             }
 
-            // Upsert intake record
+            // Upsert intake record and mark submitted
             const intake = await IntakeRecord.findOneAndUpdate(
                 { userId: req.user.id },
                 {
                     userId: req.user.id,
+                    status: 'submitted',
                     height: parseFloat(height) || 0,
                     weight: parseFloat(weight) || 0,
                     bloodPressure: bloodPressure || '',
@@ -88,10 +153,16 @@ router.post(
                     symptoms: symptoms || '',
                     submittedAt: new Date(),
                     skippedAt: null,
+                    lastModifiedAt: new Date(),
                     $push: uploadedFileIds.length > 0 ? { uploadedFiles: { $each: uploadedFileIds } } : undefined,
                 },
                 { upsert: true, new: true, omitUndefined: true }
             );
+
+            // Recalculate progress (should be high since all fields submitted)
+            const progress = intake.calcProgress();
+            intake.progressPercentage = progress;
+            await intake.save();
 
             // Mark user intake as completed
             await User.findByIdAndUpdate(req.user.id, { intakeCompleted: true, intakeSkipped: false });
@@ -101,7 +172,7 @@ router.post(
                 setImmediate(() => extractFilesAsync(uploadedFileIds));
             }
 
-            res.json({ success: true, intake });
+            res.json({ success: true, intake, progressPercentage: progress });
         } catch (err) {
             console.error('POST /api/intake/submit error:', err);
             res.status(500).json({ error: 'Failed to save intake record' });
@@ -113,12 +184,15 @@ router.post(
 router.post('/skip', requireAuth, async (req, res) => {
     try {
         await User.findByIdAndUpdate(req.user.id, { intakeSkipped: true, intakeCompleted: false });
-        await IntakeRecord.findOneAndUpdate(
+        const intake = await IntakeRecord.findOneAndUpdate(
             { userId: req.user.id },
-            { userId: req.user.id, skippedAt: new Date(), submittedAt: null },
+            { userId: req.user.id, status: 'skipped', skippedAt: new Date(), submittedAt: null, lastModifiedAt: new Date() },
             { upsert: true, new: true }
         );
-        res.json({ success: true });
+        const progress = intake.calcProgress();
+        intake.progressPercentage = progress;
+        await intake.save();
+        res.json({ success: true, progressPercentage: progress });
     } catch (err) {
         console.error('POST /api/intake/skip error:', err);
         res.status(500).json({ error: 'Failed to skip intake' });
@@ -130,13 +204,8 @@ async function extractFilesAsync(fileIds) {
     for (const id of fileIds) {
         try {
             await MedicalReport.findByIdAndUpdate(id, { extractionStatus: 'processing' });
-
             const report = await MedicalReport.findById(id);
             if (!report || !report.fileData) continue;
-
-            // Phase 3: call Gemini here
-            // const extracted = await extractMedicalDataFromFile(report.fileData, report.mimeType);
-            // For now, mark as done with empty summary
             await MedicalReport.findByIdAndUpdate(id, {
                 extractionStatus: 'done',
                 'extractedSummary.rawText': '(Extraction will be available in Phase 3)'

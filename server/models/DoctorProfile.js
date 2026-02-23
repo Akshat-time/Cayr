@@ -9,7 +9,7 @@ const DoctorProfileSchema = new mongoose.Schema({
     },
     phone: {
         type: String,
-        required: true
+        default: ''
     },
     licenseNumber: {
         type: String,
@@ -45,6 +45,10 @@ const DoctorProfileSchema = new mongoose.Schema({
     isVerified: {
         type: Boolean,
         default: false
+    },
+    bio: {
+        type: String,
+        default: ''
     },
     createdAt: {
         type: Date,

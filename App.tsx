@@ -53,9 +53,11 @@ const AuthPage: React.FC = () => {
       if (r === 'doctor') navigate('/doctor-dashboard');
       else if (r === 'admin') navigate('/admin-dashboard');
       else {
-        // Patients: go to intake if not yet completed and not skipped
-        const needsIntake = !data.user.intakeCompleted && !data.user.intakeSkipped;
-        navigate(needsIntake ? '/patient-intake' : '/patient-dashboard');
+        // Patients: only intakeStatus from IntakeRecord drives routing
+        // 'submitted' or 'skipped' → dashboard; anything else (draft, null) → intake
+        const iStatus = data.user.intakeStatus;
+        const goToDashboard = iStatus === 'submitted' || iStatus === 'skipped';
+        navigate(goToDashboard ? '/patient-dashboard' : '/patient-intake');
       }
     } catch (err: any) {
       setAuthError('Network error. Please try again.');
@@ -434,9 +436,10 @@ const AppContent: React.FC = () => {
             const r = (user.role || '').toLowerCase();
             if (r === 'doctor') return <Navigate to="/doctor-dashboard" replace />;
             if (r === 'admin') return <Navigate to="/admin-dashboard" replace />;
-            // Patients: check intake status
-            const needsIntake = !(user as any).intakeCompleted && !(user as any).intakeSkipped;
-            return <Navigate to={needsIntake ? '/patient-intake' : '/patient-dashboard'} replace />;
+            // Patients: only intakeStatus from IntakeRecord drives routing
+            const iStatus = (user as any).intakeStatus;
+            const goToDashboard = iStatus === 'submitted' || iStatus === 'skipped';
+            return <Navigate to={goToDashboard ? '/patient-dashboard' : '/patient-intake'} replace />;
           })()
         } />
 

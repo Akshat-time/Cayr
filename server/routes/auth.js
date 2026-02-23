@@ -2,10 +2,45 @@ import express from 'express';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import User from '../models/User.js';
+import IntakeRecord from '../models/IntakeRecord.js';
 import PatientProfile from '../models/PatientProfile.js';
 import DoctorProfile from '../models/DoctorProfile.js';
 
 const router = express.Router();
+
+// ── Helper: build safe user payload including intake status ───────────────────
+const buildUserPayload = async (user) => {
+    const base = {
+        id: user._id,
+        name: user.name,
+        email: user.email,
+        role: user.role,
+        phone: user.phone,
+        specialty: user.specialty,
+        dob: user.dob,
+        gender: user.gender,
+        address: user.address,
+        // Legacy flags
+        intakeCompleted: user.intakeCompleted || false,
+        intakeSkipped: user.intakeSkipped || false,
+    };
+
+    // For patients, look up their intake status from IntakeRecord
+    if (user.role === 'patient') {
+        try {
+            const intake = await IntakeRecord.findOne({ userId: user._id });
+            if (intake) {
+                base.intakeStatus = intake.status;         // 'draft'|'submitted'|'skipped'
+                base.intakeProgress = intake.progressPercentage ?? 0;
+            } else {
+                base.intakeStatus = null;
+                base.intakeProgress = 0;
+            }
+        } catch { /* non-critical — ignore */ }
+    }
+
+    return base;
+};
 
 // ── Dedicated Doctor Registration ────────────────────────────────────────────
 router.post('/register/doctor', async (req, res) => {
@@ -191,17 +226,9 @@ router.post('/login', async (req, res) => {
             maxAge: 7 * 24 * 60 * 60 * 1000
         });
 
-        // Return a consistent user object with `id` not `_id`
-        res.json({
-            user: {
-                id: user._id,
-                name: user.name,
-                email: user.email,
-                role: user.role,
-                intakeCompleted: user.intakeCompleted || false,
-                intakeSkipped: user.intakeSkipped || false
-            }
-        });
+        // Return a consistent user object with `id` not `_id` + intake status
+        const payload = await buildUserPayload(user);
+        res.json({ user: payload });
     } catch (err) {
         res.status(500).json({ error: err.message });
     }
@@ -227,20 +254,9 @@ router.get('/me', async (req, res) => {
         const user = await User.findById(decoded.id).select('-password');
         if (!user) return res.status(404).json({ error: 'User not found' });
 
-        // Always return `id` not just `_id`
-        res.json({
-            id: user._id,
-            name: user.name,
-            email: user.email,
-            role: user.role,
-            phone: user.phone,
-            specialty: user.specialty,
-            dob: user.dob,
-            gender: user.gender,
-            address: user.address,
-            intakeCompleted: user.intakeCompleted || false,
-            intakeSkipped: user.intakeSkipped || false
-        });
+        // Always return `id` not just `_id` + intake status
+        const payload = await buildUserPayload(user);
+        res.json(payload);
     } catch (err) {
         res.status(401).json({ error: 'Invalid token' });
     }

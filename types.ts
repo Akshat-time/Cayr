@@ -190,6 +190,9 @@ export interface User {
   height?: number;
   weight?: number;
   bloodType?: string;
+  bloodPressure?: string;
+  heartRate?: number;
+  symptoms?: string;
   allergies?: string[];
   conditions?: string[];
   currentMedications?: string[];
@@ -203,6 +206,9 @@ export interface User {
   experienceYears?: number | string;
   consultationFee?: number | string;
   clinicName?: string;
+  /** Intake pipeline status — drives routing and UI badges */
+  intakeStatus?: 'draft' | 'submitted' | 'skipped';
+  intakeProgress?: number; // 0-100
 }
 
 export interface AuthContextType {

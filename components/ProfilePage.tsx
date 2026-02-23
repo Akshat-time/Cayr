@@ -2,6 +2,58 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { User, UserRole } from '../types';
 
+// ── Intake Progress Ring ───────────────────────────────────────────────────────
+const IntakeRing: React.FC<{ pct: number; size?: number }> = ({ pct, size = 64 }) => {
+  const r = (size - 6) / 2;
+  const circ = 2 * Math.PI * r;
+  const dash = (pct / 100) * circ;
+  return (
+    <svg width={size} height={size} className="-rotate-90 shrink-0">
+      <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke="#e2e8f0" strokeWidth="5" />
+      <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke="#3b5bfd" strokeWidth="5"
+        strokeDasharray={`${dash} ${circ - dash}`} strokeLinecap="round"
+        style={{ transition: 'stroke-dasharray 0.6s ease' }} />
+    </svg>
+  );
+};
+
+// ── Intake Tag Input ───────────────────────────────────────────────────────────
+const TagInput: React.FC<{
+  values: string[]; suggestions: string[]; onChange: (v: string[]) => void; placeholder: string;
+}> = ({ values, suggestions, onChange, placeholder }) => {
+  const [inp, setInp] = useState('');
+  const add = (v: string) => { const t = v.trim(); if (t && !values.includes(t)) onChange([...values, t]); setInp(''); };
+  const remove = (v: string) => onChange(values.filter(x => x !== v));
+  return (
+    <div className="space-y-2">
+      <div className="flex flex-wrap gap-1.5">
+        {values.map(v => (
+          <span key={v} className="flex items-center gap-1 px-2.5 py-1 bg-indigo-100 text-indigo-800 rounded-full text-xs font-semibold">
+            {v}<button type="button" onClick={() => remove(v)} className="text-indigo-400 hover:text-red-500 transition-colors text-xs leading-none">×</button>
+          </span>
+        ))}
+      </div>
+      <div className="flex gap-2">
+        <input value={inp} onChange={e => setInp(e.target.value)}
+          onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); add(inp); } }}
+          placeholder={placeholder}
+          className="flex-1 px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400 transition" />
+        <button type="button" onClick={() => add(inp)} className="px-3 py-2 bg-indigo-600 text-white rounded-xl text-xs font-bold hover:bg-indigo-700 transition">Add</button>
+      </div>
+      <div className="flex flex-wrap gap-1.5">
+        {suggestions.filter(s => !values.includes(s)).slice(0, 5).map(s => (
+          <button key={s} type="button" onClick={() => add(s)}
+            className="px-2.5 py-1 border border-slate-200 text-slate-500 rounded-full text-[11px] hover:border-indigo-400 hover:text-indigo-600 transition">+ {s}</button>
+        ))}
+      </div>
+    </div>
+  );
+};
+
+const INTAKE_CONDITIONS = ['Diabetes', 'Hypertension', 'Asthma', 'Heart Disease', 'Thyroid Disorder', 'Arthritis', 'Migraine'];
+const INTAKE_ALLERGIES = ['Penicillin', 'Aspirin', 'Sulfa drugs', 'Ibuprofen', 'Latex', 'Pollen', 'Peanuts', 'Dairy'];
+const BLOOD_TYPE_OPTS = ['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-', 'Unknown'];
+
 interface ProfilePageProps {
   user: User;
   onUpdateProfile: (updatedData: Partial<User>) => void;
@@ -77,41 +129,155 @@ const ProfilePage: React.FC<ProfilePageProps> = ({ user, onUpdateProfile, onLogo
   const [formData, setFormData] = useState<Partial<User>>({});
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // Load persisted data from localStorage, merge with user prop
-  useEffect(() => {
-    const saved = localStorage.getItem(LS_KEY + '_' + user.id);
-    const merged: Partial<User> = saved ? { ...JSON.parse(saved) } : {};
+  // ── Intake state ─────────────────────────────────────────────────────────
+  const [intakeRecord, setIntakeRecord] = useState<any>(null);
+  const [intakeLoading, setIntakeLoading] = useState(true);
+  const [intakeSaving, setIntakeSaving] = useState(false);
+  const [showIntakePopup, setShowIntakePopup] = useState(false);
+  const [intakeSaved, setIntakeSaved] = useState(false);
+  const [isEditingIntake, setIsEditingIntake] = useState(false);
 
-    setFormData({
-      firstName: merged.firstName || user.firstName || user.name.split(' ')[0] || '',
-      lastName: merged.lastName || user.lastName || user.name.split(' ')[1] || '',
-      email: user.email,
-      phone: merged.phone || user.phone || '',
-      dob: merged.dob || user.dob || '',
-      gender: merged.gender || user.gender || 'Male',
-      profilePicture: merged.profilePicture || user.profilePicture || '',
-      addressDetails: merged.addressDetails || user.addressDetails || {
-        street: '', city: '', state: '', zip: '', country: 'India'
-      },
-      bloodType: merged.bloodType || user.bloodType || 'O+',
-      allergies: merged.allergies || user.allergies || [],
-      conditions: merged.conditions || user.conditions || [],
-      currentMedications: merged.currentMedications || user.currentMedications || [],
-      medicalHistory: merged.medicalHistory || user.medicalHistory || '',
-      height: merged.height ?? user.height ?? 0,
-      weight: merged.weight ?? user.weight ?? 0,
-      notifications: merged.notifications || user.notifications || { email: true, sms: false },
-      twoFactorEnabled: merged.twoFactorEnabled ?? user.twoFactorEnabled ?? false,
-      // Doctor-specific
-      specialty: (merged as any).specialty || (user as any).specialty || '',
-      licenseNumber: (merged as any).licenseNumber || (user as any).licenseNumber || '',
-      experienceYears: (merged as any).experienceYears || (user as any).experienceYears || '',
-      clinicName: (merged as any).clinicName || (user as any).clinicName || '',
-      consultationFee: (merged as any).consultationFee || (user as any).consultationFee || '',
-    });
-    const t = setTimeout(() => setIsLoading(false), 300);
-    return () => clearTimeout(t);
+  const [iHeight, setIHeight] = useState('');
+  const [iWeight, setIWeight] = useState('');
+  const [iBP, setIBP] = useState('');
+  const [iHR, setIHR] = useState('');
+  const [iBloodType, setIBloodType] = useState('');
+  const [iAllergies, setIAllergies] = useState<string[]>([]);
+  const [iConditions, setIConditions] = useState<string[]>([]);
+  const [iMeds, setIMeds] = useState<string[]>([]);
+  const [iHistory, setIHistory] = useState('');
+  const [iSymptoms, setISymptoms] = useState('');
+
+  // Load from server first, fall back to localStorage
+  useEffect(() => {
+    let cancelled = false;
+    const loadProfile = async () => {
+      try {
+        const res = await fetch('/api/users/me/profile', { credentials: 'include' });
+        if (res.ok) {
+          const data = await res.json();
+          if (!cancelled) {
+            setFormData({
+              firstName: data.name?.split(' ')[0] || '',
+              lastName: data.name?.split(' ').slice(1).join(' ') || '',
+              email: data.email || user.email,
+              phone: data.phone || '',
+              dob: data.dob || '',
+              gender: data.gender || 'Male',
+              profilePicture: data.profilePicture || '',
+              addressDetails: data.addressDetails || { street: '', city: '', state: '', zip: '', country: 'India' },
+              bloodType: data.bloodType || 'O+',
+              allergies: data.allergies || [],
+              conditions: data.conditions || [],
+              currentMedications: data.currentMedications || [],
+              medicalHistory: data.medicalHistory || '',
+              height: data.height ?? 0,
+              weight: data.weight ?? 0,
+              notifications: data.notifications || { email: true, sms: false },
+              twoFactorEnabled: data.twoFactorEnabled ?? false,
+              specialty: data.specialty || '',
+              licenseNumber: data.licenseNumber || '',
+              experienceYears: data.experienceYears || '',
+              clinicName: data.clinicName || '',
+              consultationFee: data.consultationFee || '',
+            });
+          }
+          return;
+        }
+      } catch { /* network error – fall through to localStorage */ }
+      // Fallback: localStorage
+      const saved = localStorage.getItem(LS_KEY + '_' + user.id);
+      const merged: Partial<User> = saved ? { ...JSON.parse(saved) } : {};
+      if (!cancelled) {
+        setFormData({
+          firstName: merged.firstName || user.firstName || user.name.split(' ')[0] || '',
+          lastName: merged.lastName || user.lastName || user.name.split(' ')[1] || '',
+          email: user.email,
+          phone: merged.phone || user.phone || '',
+          dob: merged.dob || user.dob || '',
+          gender: merged.gender || user.gender || 'Male',
+          profilePicture: merged.profilePicture || user.profilePicture || '',
+          addressDetails: merged.addressDetails || user.addressDetails || { street: '', city: '', state: '', zip: '', country: 'India' },
+          bloodType: merged.bloodType || user.bloodType || 'O+',
+          allergies: merged.allergies || user.allergies || [],
+          conditions: merged.conditions || user.conditions || [],
+          currentMedications: merged.currentMedications || user.currentMedications || [],
+          medicalHistory: merged.medicalHistory || user.medicalHistory || '',
+          height: merged.height ?? user.height ?? 0,
+          weight: merged.weight ?? user.weight ?? 0,
+          notifications: merged.notifications || user.notifications || { email: true, sms: false },
+          twoFactorEnabled: merged.twoFactorEnabled ?? user.twoFactorEnabled ?? false,
+          specialty: (merged as any).specialty || (user as any).specialty || '',
+          licenseNumber: (merged as any).licenseNumber || (user as any).licenseNumber || '',
+          experienceYears: (merged as any).experienceYears || (user as any).experienceYears || '',
+          clinicName: (merged as any).clinicName || (user as any).clinicName || '',
+          consultationFee: (merged as any).consultationFee || (user as any).consultationFee || '',
+        });
+      }
+    };
+    loadProfile().finally(() => { if (!cancelled) setIsLoading(false); });
+    return () => { cancelled = true; };
   }, [user]);
+
+  // ── Fetch intake record ───────────────────────────────────────────────────
+  useEffect(() => {
+    if ((user.role || '').toLowerCase() !== 'patient') { setIntakeLoading(false); return; }
+    const fetchIntake = async () => {
+      try {
+        const res = await fetch('/api/intake/me', { credentials: 'include' });
+        const data = await res.json();
+        if (data.intake) {
+          setIntakeRecord(data.intake);
+          const d = data.intake;
+          setIHeight(d.height ? String(d.height) : '');
+          setIWeight(d.weight ? String(d.weight) : '');
+          setIBP(d.bloodPressure || '');
+          setIHR(d.heartRate ? String(d.heartRate) : '');
+          setIBloodType(d.bloodType || '');
+          setIAllergies(d.allergies || []);
+          setIConditions(d.conditions || []);
+          setIMeds(d.currentMedications || []);
+          setIHistory(d.medicalHistory || '');
+          setISymptoms(d.symptoms || '');
+          if (d.status !== 'submitted') setShowIntakePopup(true);
+        } else {
+          // No record at all — show popup
+          setShowIntakePopup(true);
+        }
+      } catch { /* silent */ }
+      finally { setIntakeLoading(false); }
+    };
+    fetchIntake();
+  }, [user.role]);
+
+  // ── Save intake ───────────────────────────────────────────────────────────
+  const handleSaveIntake = useCallback(async () => {
+    setIntakeSaving(true);
+    try {
+      const body = {
+        height: iHeight, weight: iWeight, bloodPressure: iBP, heartRate: iHR,
+        bloodType: iBloodType,
+        allergies: JSON.stringify(iAllergies),
+        conditions: JSON.stringify(iConditions),
+        currentMedications: JSON.stringify(iMeds),
+        medicalHistory: iHistory, symptoms: iSymptoms,
+        status: intakeRecord?.status === 'submitted' ? 'submitted' : 'draft',
+      };
+      const res = await fetch('/api/intake/save-draft', {
+        method: 'PATCH', credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+      const data = await res.json();
+      if (res.ok && data.intake) {
+        setIntakeRecord(data.intake);
+        if (data.intake.status === 'submitted') setShowIntakePopup(false);
+      }
+      setIntakeSaved(true);
+      setTimeout(() => setIntakeSaved(false), 3000);
+    } catch { /* silent */ }
+    finally { setIntakeSaving(false); setIsEditingIntake(false); }
+  }, [iHeight, iWeight, iBP, iHR, iBloodType, iAllergies, iConditions, iMeds, iHistory, iSymptoms, intakeRecord]);
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
     const { name, value, type } = e.target as HTMLInputElement;
@@ -212,19 +378,40 @@ const ProfilePage: React.FC<ProfilePageProps> = ({ user, onUpdateProfile, onLogo
     return () => clearTimeout(timer);
   }, [formData.addressDetails?.zip, formData.addressDetails?.country, isEditing, runPincodeLookup]);
 
-  // ── Save ─────────────────────────────────────────────────────────────────
-  const handleSave = () => {
+  // ── Save: persist to backend + localStorage ─────────────────────────────
+  const [isSaving, setIsSaving] = useState(false);
+  const handleSave = async () => {
     if (!formData.email?.includes('@')) { alert('Please enter a valid email address.'); return; }
-    const updated = {
+    const payload = {
       ...formData,
       name: `${formData.firstName || ''} ${formData.lastName || ''}`.trim()
     };
-    // Persist to localStorage
-    localStorage.setItem(LS_KEY + '_' + user.id, JSON.stringify(updated));
-    onUpdateProfile(updated);
-    setIsEditing(false);
-    setSuccessMessage('Profile updated successfully!');
-    setTimeout(() => setSuccessMessage(null), 3000);
+    setIsSaving(true);
+    try {
+      const res = await fetch('/api/users/me/profile', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify(payload),
+      });
+      if (!res.ok) {
+        const err = await res.json();
+        setSuccessMessage(null);
+        alert(err.error || 'Failed to save profile.');
+        return;
+      }
+      const data = await res.json();
+      // Also persist locally so reload is instant
+      localStorage.setItem(LS_KEY + '_' + user.id, JSON.stringify(payload));
+      onUpdateProfile({ ...payload, name: payload.name });
+      setIsEditing(false);
+      setSuccessMessage('Profile updated successfully!');
+      setTimeout(() => setSuccessMessage(null), 3000);
+    } catch {
+      alert('Network error. Please check your connection.');
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   const handleCancel = () => {
@@ -274,9 +461,49 @@ const ProfilePage: React.FC<ProfilePageProps> = ({ user, onUpdateProfile, onLogo
           ✓ {successMessage}
         </div>
       )}
+      {intakeSaved && (
+        <div className="fixed top-24 right-8 z-50 bg-indigo-600 text-white px-6 py-3 rounded-2xl font-black text-xs uppercase tracking-widest shadow-2xl animate-in slide-in-from-right-4">
+          ✓ Intake saved
+        </div>
+      )}
 
       {/* Hidden file input for avatar */}
       <input ref={fileInputRef} type="file" accept="image/*" className="hidden" onChange={handleAvatarChange} />
+
+      {/* ── Intake Progress Popup (patients only, not submitted) ── */}
+      {showIntakePopup && !intakeLoading && (user.role || '').toLowerCase() === 'patient' && (
+        <div className="relative bg-gradient-to-br from-[#3b5bfd] to-[#4c6ef5] rounded-[32px] p-6 text-white shadow-2xl shadow-blue-500/20 animate-in slide-in-from-top-4 duration-500">
+          <button onClick={() => setShowIntakePopup(false)}
+            className="absolute top-4 right-4 w-8 h-8 bg-white/10 hover:bg-white/20 rounded-full flex items-center justify-center transition text-sm">
+            ✕
+          </button>
+          <div className="flex flex-col md:flex-row items-center gap-6">
+            <div className="relative shrink-0">
+              <IntakeRing pct={intakeRecord?.progressPercentage ?? 0} size={72} />
+              <div className="absolute inset-0 flex items-center justify-center">
+                <span className="text-sm font-black">{intakeRecord?.progressPercentage ?? 0}%</span>
+              </div>
+            </div>
+            <div className="flex-1 text-center md:text-left">
+              <h3 className="text-lg font-black">
+                {intakeRecord?.status === 'skipped' ? 'Complete Your Health Profile' :
+                  intakeRecord?.status === 'draft' ? 'Resume Your Intake Form' :
+                    'Start Your Intake Form'}
+              </h3>
+              <p className="text-blue-200 text-sm mt-1 mb-4">
+                {intakeRecord?.status === 'draft'
+                  ? 'You have a saved draft. Edit the Intake Details section below to finish.'
+                  : 'Your health intake is incomplete. Fill it in to get personalised care.'}
+              </p>
+              <button
+                onClick={() => { setIsEditingIntake(true); setShowIntakePopup(false); document.getElementById('intake-section')?.scrollIntoView({ behavior: 'smooth' }); }}
+                className="px-5 py-2.5 bg-white text-[#3b5bfd] rounded-2xl font-black text-sm hover:bg-blue-50 transition shadow-lg">
+                {intakeRecord?.status === 'draft' ? 'Continue Intake →' : 'Fill Intake Details →'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* ── Profile Header ── */}
       <div className="bg-white rounded-[40px] p-8 border border-slate-100 shadow-sm flex flex-col md:flex-row items-center md:items-start gap-8 relative overflow-hidden">
@@ -339,15 +566,18 @@ const ProfilePage: React.FC<ProfilePageProps> = ({ user, onUpdateProfile, onLogo
         {/* Actions */}
         <div className="flex items-center gap-3 md:self-start">
           {isEditing && (
-            <button onClick={handleCancel} className="px-6 py-4 rounded-2xl text-[10px] font-black uppercase tracking-widest border border-slate-200 text-slate-500 hover:bg-slate-50 transition-all">
+            <button onClick={handleCancel} disabled={isSaving} className="px-6 py-4 rounded-2xl text-[10px] font-black uppercase tracking-widest border border-slate-200 text-slate-500 hover:bg-slate-50 transition-all disabled:opacity-50">
               Cancel
             </button>
           )}
           <button
             onClick={() => isEditing ? handleSave() : setIsEditing(true)}
-            className={`px-8 py-4 rounded-2xl text-[10px] font-black uppercase tracking-[0.2em] shadow-xl transition-all ${isEditing ? 'bg-green-500 text-white shadow-green-100 hover:bg-green-600' : 'bg-[#1a1d1f] text-white hover:bg-slate-700'}`}
+            disabled={isSaving}
+            className={`px-8 py-4 rounded-2xl text-[10px] font-black uppercase tracking-[0.2em] shadow-xl transition-all flex items-center gap-2 disabled:opacity-60 ${isEditing ? 'bg-green-500 text-white shadow-green-100 hover:bg-green-600' : 'bg-[#1a1d1f] text-white hover:bg-slate-700'}`}
           >
-            {isEditing ? '✓ Save Profile' : 'Edit Profile'}
+            {isSaving ? (
+              <><span className="w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin" />Saving…</>
+            ) : isEditing ? '✓ Save Profile' : 'Edit Profile'}
           </button>
         </div>
       </div>
@@ -557,6 +787,149 @@ const ProfilePage: React.FC<ProfilePageProps> = ({ user, onUpdateProfile, onLogo
                     </div>
                   )}
                 </Field>
+              </section>
+
+              {/* ── Intake Details Section ──────────────────────────────── */}
+              <section id="intake-section" className="bg-white rounded-[40px] p-10 border border-slate-100 shadow-sm">
+                <div className="flex flex-wrap items-start justify-between gap-4 mb-8">
+                  <div>
+                    <div className="flex items-center gap-4 mb-2">
+                      <div className="w-1.5 h-6 bg-indigo-500 rounded-full" />
+                      <h2 className="text-xl font-black text-slate-800 tracking-tight">Intake Details</h2>
+                    </div>
+                    <div className="flex items-center gap-3 pl-5">
+                      {intakeRecord?.status === 'submitted' &&
+                        <span className="px-3 py-1 bg-green-100 text-green-700 text-[10px] font-black uppercase tracking-widest rounded-full">✓ Submitted</span>}
+                      {intakeRecord?.status === 'draft' &&
+                        <span className="px-3 py-1 bg-amber-100 text-amber-700 text-[10px] font-black uppercase tracking-widest rounded-full">📋 Draft</span>}
+                      {intakeRecord?.status === 'skipped' &&
+                        <span className="px-3 py-1 bg-slate-100 text-slate-500 text-[10px] font-black uppercase tracking-widest rounded-full">⏭ Skipped</span>}
+                      {!intakeLoading && !intakeRecord &&
+                        <span className="px-3 py-1 bg-red-50 text-red-400 text-[10px] font-black uppercase tracking-widest rounded-full">Not Started</span>}
+                      {!intakeLoading && intakeRecord && (
+                        <div className="flex items-center gap-2">
+                          <div className="h-1.5 w-28 bg-slate-100 rounded-full overflow-hidden">
+                            <div className="h-full bg-[#3b5bfd] rounded-full transition-all duration-700" style={{ width: `${intakeRecord.progressPercentage ?? 0}%` }} />
+                          </div>
+                          <span className="text-[11px] font-bold text-slate-400">{intakeRecord.progressPercentage ?? 0}%</span>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => isEditingIntake ? handleSaveIntake() : setIsEditingIntake(true)}
+                    disabled={intakeSaving}
+                    className={`px-6 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all disabled:opacity-50 ${isEditingIntake ? 'bg-indigo-600 text-white hover:bg-indigo-700 shadow-lg' : 'bg-slate-50 text-slate-600 hover:bg-slate-100'
+                      }`}>
+                    {intakeSaving ? 'Saving…' : isEditingIntake ? 'Save Intake' : 'Edit Intake'}
+                  </button>
+                </div>
+
+                {intakeLoading ? (
+                  <div className="py-8 flex items-center justify-center gap-3 text-slate-400">
+                    <div className="w-5 h-5 border-2 border-indigo-300 border-t-transparent rounded-full animate-spin" />
+                    <span className="text-sm font-bold">Loading intake data…</span>
+                  </div>
+                ) : (
+                  <div className="space-y-8">
+                    {/* Vitals */}
+                    <div>
+                      <p className="text-[11px] font-black uppercase tracking-widest text-slate-400 mb-4">Vitals</p>
+                      <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+                        {[
+                          { label: 'Height (cm)', val: iHeight, set: setIHeight, hint: '170' },
+                          { label: 'Weight (kg)', val: iWeight, set: setIWeight, hint: '65' },
+                          { label: 'Heart Rate (bpm)', val: iHR, set: setIHR, hint: '72' },
+                        ].map(f => (
+                          <div key={f.label} className="space-y-1">
+                            <label className="text-[10px] font-black uppercase tracking-widest text-slate-400">{f.label}</label>
+                            {isEditingIntake
+                              ? <input type="number" value={f.val} onChange={e => f.set(e.target.value)} placeholder={f.hint}
+                                className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-semibold outline-none focus:border-indigo-500 focus:bg-white transition" />
+                              : <p className="p-3 bg-slate-50/70 rounded-xl font-bold text-slate-700">{f.val || '—'}</p>
+                            }
+                          </div>
+                        ))}
+                        <div className="space-y-1">
+                          <label className="text-[10px] font-black uppercase tracking-widest text-slate-400">Blood Pressure</label>
+                          {isEditingIntake
+                            ? <input type="text" value={iBP} onChange={e => setIBP(e.target.value)} placeholder="120/80"
+                              className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-semibold outline-none focus:border-indigo-500 focus:bg-white transition" />
+                            : <p className="p-3 bg-slate-50/70 rounded-xl font-bold text-slate-700">{iBP || '—'}</p>
+                          }
+                        </div>
+                        <div className="space-y-1">
+                          <label className="text-[10px] font-black uppercase tracking-widest text-slate-400">Blood Type</label>
+                          {isEditingIntake
+                            ? <select value={iBloodType} onChange={e => setIBloodType(e.target.value)}
+                              className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-semibold outline-none focus:border-indigo-500 focus:bg-white transition">
+                              <option value="">Select…</option>
+                              {BLOOD_TYPE_OPTS.map(b => <option key={b} value={b}>{b}</option>)}
+                            </select>
+                            : <p className="p-3 bg-slate-50/70 rounded-xl font-bold text-slate-700">{iBloodType || '—'}</p>
+                          }
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Medical background */}
+                    <div>
+                      <p className="text-[11px] font-black uppercase tracking-widest text-slate-400 mb-4">Medical Background</p>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <div className="space-y-1">
+                          <label className="text-[10px] font-black uppercase tracking-widest text-slate-400">Allergies</label>
+                          {isEditingIntake
+                            ? <TagInput values={iAllergies} suggestions={INTAKE_ALLERGIES} onChange={setIAllergies} placeholder="e.g. Penicillin…" />
+                            : <div className="flex flex-wrap gap-1.5 p-3 bg-slate-50/70 rounded-xl min-h-[44px]">
+                              {iAllergies.length > 0 ? iAllergies.map(a => <span key={a} className="px-2 py-0.5 bg-red-50 text-red-600 rounded-full text-xs font-semibold">{a}</span>) : <span className="text-slate-400 text-sm">None</span>}
+                            </div>}
+                        </div>
+                        <div className="space-y-1">
+                          <label className="text-[10px] font-black uppercase tracking-widest text-slate-400">Pre-existing Conditions</label>
+                          {isEditingIntake
+                            ? <TagInput values={iConditions} suggestions={INTAKE_CONDITIONS} onChange={setIConditions} placeholder="e.g. Diabetes…" />
+                            : <div className="flex flex-wrap gap-1.5 p-3 bg-slate-50/70 rounded-xl min-h-[44px]">
+                              {iConditions.length > 0 ? iConditions.map(c => <span key={c} className="px-2 py-0.5 bg-amber-50 text-amber-700 rounded-full text-xs font-semibold">{c}</span>) : <span className="text-slate-400 text-sm">None</span>}
+                            </div>}
+                        </div>
+                        <div className="space-y-1">
+                          <label className="text-[10px] font-black uppercase tracking-widest text-slate-400">Current Medications</label>
+                          {isEditingIntake
+                            ? <TagInput values={iMeds} suggestions={[]} onChange={setIMeds} placeholder="e.g. Metformin 500mg…" />
+                            : <div className="flex flex-wrap gap-1.5 p-3 bg-slate-50/70 rounded-xl min-h-[44px]">
+                              {iMeds.length > 0 ? iMeds.map(m => <span key={m} className="px-2 py-0.5 bg-blue-50 text-blue-700 rounded-full text-xs font-semibold">{m}</span>) : <span className="text-slate-400 text-sm">None</span>}
+                            </div>}
+                        </div>
+                        <div className="space-y-1">
+                          <label className="text-[10px] font-black uppercase tracking-widest text-slate-400">Medical History</label>
+                          {isEditingIntake
+                            ? <textarea value={iHistory} onChange={e => setIHistory(e.target.value)} rows={3}
+                              className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-sm outline-none focus:border-indigo-500 focus:bg-white transition resize-none" placeholder="Previous surgeries…" />
+                            : <p className="p-3 bg-slate-50/70 rounded-xl font-bold text-slate-600 text-sm min-h-[44px] leading-relaxed">{iHistory || '—'}</p>}
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Symptoms */}
+                    <div>
+                      <p className="text-[11px] font-black uppercase tracking-widest text-slate-400 mb-3">Current Symptoms</p>
+                      {isEditingIntake
+                        ? <textarea value={iSymptoms} onChange={e => setISymptoms(e.target.value)} rows={2}
+                          className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-sm outline-none focus:border-indigo-500 focus:bg-white transition resize-none" placeholder="Describe symptoms…" />
+                        : <p className="p-3 bg-slate-50/70 rounded-xl font-bold text-slate-600 text-sm leading-relaxed">{iSymptoms || 'No symptoms recorded.'}</p>}
+                    </div>
+
+                    {/* Prompt to edit if not yet submitted */}
+                    {!isEditingIntake && intakeRecord?.status !== 'submitted' && (
+                      <div className="flex justify-end">
+                        <button onClick={() => setIsEditingIntake(true)}
+                          className="px-6 py-3 bg-[#3b5bfd] text-white rounded-2xl font-black text-sm shadow-lg shadow-blue-500/20 hover:bg-blue-700 transition">
+                          ✏️ Edit & Complete Intake
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                )}
               </section>
             </>
           )}

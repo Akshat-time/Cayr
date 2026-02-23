@@ -46,7 +46,7 @@ MISSION:
 Output should be strictly the translation unless a summary is requested.`;
 
 export const createClinicalIntakeSession = () => {
-  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+  const ai = new GoogleGenAI({ apiKey: (import.meta as any).env.VITE_GEMINI_API_KEY });
   return ai.chats.create({
     model: 'gemini-2.0-flash-exp',
     config: {
@@ -57,7 +57,7 @@ export const createClinicalIntakeSession = () => {
 };
 
 export const createSymptomCheckerSession = () => {
-  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+  const ai = new GoogleGenAI({ apiKey: (import.meta as any).env.VITE_GEMINI_API_KEY });
   return ai.chats.create({
     model: 'gemini-2.0-flash-exp',
     config: {
@@ -68,7 +68,7 @@ export const createSymptomCheckerSession = () => {
 };
 
 export const createGeneralAISession = () => {
-  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+  const ai = new GoogleGenAI({ apiKey: (import.meta as any).env.VITE_GEMINI_API_KEY });
   return ai.chats.create({
     model: 'gemini-2.0-flash-exp',
     config: {
@@ -85,7 +85,7 @@ export const connectVoiceBridge = (callbacks: {
   onerror?: (e: any) => void;
   onclose?: (e: any) => void;
 }) => {
-  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+  const ai = new GoogleGenAI({ apiKey: (import.meta as any).env.VITE_GEMINI_API_KEY });
   return ai.live.connect({
     model: 'gemini-2.0-flash-exp',
     callbacks,
@@ -102,7 +102,7 @@ export const connectVoiceBridge = (callbacks: {
 };
 
 export const searchNearbyClinics = async (lat: number, lng: number, category: string = "medical clinics") => {
-  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+  const ai = new GoogleGenAI({ apiKey: (import.meta as any).env.VITE_GEMINI_API_KEY });
 
   const prompt = `Find 5 top-rated ${category} near ${lat}, ${lng}. 
   Return a structured list. For each, describe their main medical service.
@@ -128,7 +128,7 @@ export const searchNearbyClinics = async (lat: number, lng: number, category: st
 };
 
 export const generateSOAPNote = async (chatHistory: string) => {
-  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+  const ai = new GoogleGenAI({ apiKey: (import.meta as any).env.VITE_GEMINI_API_KEY });
   try {
     const response = await ai.models.generateContent({
       model: 'gemini-2.0-flash-exp',
