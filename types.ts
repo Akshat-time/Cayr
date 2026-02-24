@@ -109,6 +109,9 @@ export interface MedicalReport {
   patientId: string;
   findings: string;
   type: string;
+  reportType?: 'ai_intake' | 'doctor_consultation';
+  fileData?: string;
+  fileName?: string;
   demographics: {
     dob: string;
     address: string;
@@ -229,4 +232,16 @@ export interface Appointment {
   status: AppointmentStatus;
   notes?: string;
   type?: string;
+  consultationLink?: string;
+  paymentRequired?: boolean;
+  doctorProfile?: {
+    specialization: string;
+    consultationFee: number;
+    clinicName: string;
+  };
+  priceDetails?: {
+    baseFee: number;
+    tax: number;
+    total: number;
+  };
 }

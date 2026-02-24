@@ -1,5 +1,6 @@
 
 import React, { useState, useEffect, useRef } from 'react';
+import { jsPDF } from 'jspdf';
 import { User, Appointment, AppointmentStatus, MedicalReport, Prescription, Payment, PainArea } from '../types';
 import { MOCK_DOCTORS } from '../constants';
 import {
@@ -14,19 +15,10 @@ import {
 } from 'recharts';
 import MultilingualBridge from './MultilingualBridge';
 import BodyScanner from './BodyScanner';
-import Pharmacy from './Pharmacy';
 import ClinicLabFinder from './ClinicLabFinder';
+import Pharmacy from './Pharmacy';
 
 interface ChatMessage { role: 'user' | 'ai'; text: string; }
-interface LiveFacility {
-  name: string;
-  uri: string;
-  type: string;
-  address?: string;
-  clinicalContext?: string;
-  latOffset?: number;
-  lngOffset?: number;
-}
 
 interface PatientDashboardProps {
   user: User;
@@ -36,13 +28,24 @@ interface PatientDashboardProps {
   payments: Payment[];
   onBook: (doctorId: string, doctorName: string, date: string, time: string) => void;
   onAddReport: (report: MedicalReport) => void;
+  onOpenChat?: (appointmentId: string) => void;
   onUploadPrescription: (prescription: Prescription) => void;
   view: 'dashboard' | 'analytics' | 'payments' | 'reports' | 'reminders' | 'facilities' | 'booking' | 'pharmacy';
   onSubViewChange?: (view: string) => void;
 }
 
 const PatientDashboard: React.FC<PatientDashboardProps> = ({
-  user, appointments, medicalReports, prescriptions, payments, onBook, onAddReport, view: initialView = 'dashboard', onSubViewChange
+  user,
+  appointments,
+  medicalReports,
+  prescriptions,
+  payments,
+  onBook,
+  onAddReport,
+  onOpenChat,
+  onUploadPrescription,
+  view: initialView = 'dashboard',
+  onSubViewChange
 }) => {
   const [activeTab, setActiveTab] = useState(initialView);
   const [isBridgeOpen, setIsBridgeOpen] = useState(false);
@@ -59,6 +62,7 @@ const PatientDashboard: React.FC<PatientDashboardProps> = ({
     const saved = sessionStorage.getItem('cayr_pain_map');
     return saved ? JSON.parse(saved) : [];
   });
+
 
   const [selectedDoctorId, setSelectedDoctorId] = useState<string | null>(null);
   const [bookingDate, setBookingDate] = useState('');
@@ -89,6 +93,11 @@ const PatientDashboard: React.FC<PatientDashboardProps> = ({
     onSubViewChange?.(tab);
   };
 
+  useEffect(() => {
+    if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+  }, [chatHistory, isTyping]);
+
+
   const handleSendMessage = async (e: React.FormEvent) => {
     e.preventDefault();
     const txt = chatInput.trim();
@@ -110,6 +119,30 @@ const PatientDashboard: React.FC<PatientDashboardProps> = ({
     }
   };
 
+  const handleDownloadReport = (base64Data: string, fileName: string) => {
+    try {
+      const base64Content = base64Data.includes('base64,') ? base64Data.split('base64,')[1] : base64Data;
+      const binaryString = window.atob(base64Content);
+      const len = binaryString.length;
+      const bytes = new Uint8Array(len);
+      for (let i = 0; i < len; i++) {
+        bytes[i] = binaryString.charCodeAt(i);
+      }
+      const blob = new Blob([bytes], { type: 'application/pdf' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = fileName;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+    } catch (e) {
+      console.error("Download failed:", e);
+      alert("Failed to download report. The file may be corrupted.");
+    }
+  };
+
   const handleCreateReport = async () => {
     setIsGeneratingReport(true);
     const history = chatHistory.map(m => `${m.role}: ${m.text}`).join('\n');
@@ -118,17 +151,62 @@ const PatientDashboard: React.FC<PatientDashboardProps> = ({
       : "";
 
     const summary = await generateSOAPNote(history + painContext);
-    const report: MedicalReport = {
-      id: `SOAP-${Date.now()}`,
-      date: new Date().toLocaleDateString(),
-      doctorName: "AI Clinical Scribe",
-      patientId: user.id,
+
+    const doc = new jsPDF();
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(22);
+    doc.setTextColor(59, 91, 253);
+    doc.text("CAYR CLINICAL INTAKE REPORT", 20, 30);
+
+    doc.setFontSize(10);
+    doc.setTextColor(100, 116, 139);
+    doc.text(`Generated on: ${new Date().toLocaleString()}`, 20, 38);
+
+    doc.setDrawColor(239, 242, 246);
+    doc.line(20, 45, 190, 45);
+
+    doc.setFontSize(12);
+    doc.setTextColor(30, 41, 59);
+    doc.text("PATIENT INFORMATION", 20, 55);
+    doc.setFont("helvetica", "normal");
+    doc.text(`Name: ${user.name}`, 20, 62);
+    doc.text(`DOB: ${user.dob || 'N/A'}`, 20, 69);
+    doc.text(`Address: ${user.address || 'N/A'}`, 20, 76);
+
+    doc.setFont("helvetica", "bold");
+    doc.text("CLINICAL SUMMARY (SOAP NOTE)", 20, 90);
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(10);
+    const splitSummary = doc.splitTextToSize(summary, 170);
+    doc.text(splitSummary, 20, 97);
+
+    if (activePainMap.length > 0) {
+      const yPos = 97 + (splitSummary.length * 5) + 10;
+      doc.setFont("helvetica", "bold");
+      doc.text("ACTIVE PAIN MAP DATA", 20, yPos);
+      doc.setFont("helvetica", "normal");
+      activePainMap.forEach((area, i) => {
+        doc.text(`- ${area.label} (${area.side}): Intensity ${area.intensity}/10`, 20, yPos + 7 + (i * 6));
+      });
+    }
+
+    const fileData = doc.output('datauristring');
+
+    const report: any = {
+      title: "AI Intake Report",
+      description: "Automated symptom assessment and SOAP note generation.",
       findings: summary,
       type: "Pre-Assessment Note",
+      reportType: 'ai_intake',
+      uploadedBy: 'patient',
+      fileName: `Intake_Report_${user.name.replace(/\s+/g, '_')}_${Date.now()}.pdf`,
+      fileData: fileData,
       demographics: { dob: user.dob || '', address: user.address || '', height: user.height || 0, weight: user.weight || 0, age: 30 },
       painMap: activePainMap
     };
-    onAddReport(report);
+
+    if (onAddReport) await onAddReport(report);
+
     setIsGeneratingReport(false);
     setIsChatOpen(false);
     setReportReady(false);
@@ -284,12 +362,18 @@ const PatientDashboard: React.FC<PatientDashboardProps> = ({
               <div className="py-20 text-center text-slate-300 font-black uppercase text-[10px] tracking-widest">No visits booked.</div>
             ) : (
               appointments.filter(a => a.status !== 'CANCELLED').slice(0, 3).map(app => (
-                <div key={app.id} className="p-5 bg-slate-50/50 rounded-3xl border border-transparent hover:border-slate-200 transition-all flex items-center space-x-4">
+                <div key={app.id} className="p-5 bg-slate-50/50 rounded-3xl border border-transparent hover:border-slate-200 transition-all flex items-center space-x-4 group">
                   <div className="w-12 h-12 bg-white rounded-xl border border-slate-100 flex items-center justify-center text-lg shadow-sm">🩺</div>
                   <div className="flex-1">
                     <p className="text-sm font-black text-slate-800">{app.doctorName}</p>
                     <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-1">{app.date} • {app.time}</p>
                   </div>
+                  <button
+                    onClick={() => onOpenChat?.(app.id)}
+                    className="w-10 h-10 bg-white rounded-xl border border-slate-100 flex items-center justify-center text-blue-600 hover:bg-blue-600 hover:text-white transition-all shadow-sm group-hover:scale-105"
+                  >
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" /></svg>
+                  </button>
                 </div>
               ))
             )}
@@ -364,30 +448,102 @@ const PatientDashboard: React.FC<PatientDashboardProps> = ({
 
   return (
     <div className="max-w-7xl mx-auto pb-20">
-      {/* View Switcher */}
-      <nav className="flex space-x-2 bg-white/50 backdrop-blur-md p-1.5 rounded-[28px] border border-white/50 mb-10 w-fit">
-        {[
-          { id: 'dashboard', label: 'Overview', icon: '🏠' },
-          { id: 'booking', label: 'Visits', icon: '📅' },
-          { id: 'facilities', label: 'Facility Explorer', icon: '📍' },
-          { id: 'reports', label: 'Clinical Vault', icon: '📄' },
-          { id: 'pharmacy', label: 'Pharmacy', icon: '💊' },
-        ].map(t => (
-          <button
-            key={t.id}
-            onClick={() => handleTabChange(t.id as any)}
-            className={`px-6 py-3.5 rounded-2xl text-[10px] font-black uppercase tracking-[0.2em] transition-all flex items-center space-x-3 ${activeTab === t.id ? 'bg-white text-[#3b5bfd] shadow-xl shadow-blue-500/5' : 'text-slate-400 hover:text-slate-600'}`}
-          >
-            <span>{t.icon}</span>
-            <span className="hidden sm:inline">{t.label}</span>
-          </button>
-        ))}
-      </nav>
 
       {activeTab === 'dashboard' && renderHome()}
       {activeTab === 'booking' && renderBooking()}
       {activeTab === 'facilities' && renderFacilities()}
-      {activeTab === 'reports' && <div className="p-20 text-center text-slate-300 font-black uppercase text-[11px] tracking-widest bg-white rounded-[48px] border border-slate-100">Medical Repository Syncing...</div>}
+      {activeTab === 'reports' && (
+        <div className="space-y-10 animate-in fade-in duration-700">
+          <div className="flex justify-between items-end">
+            <div>
+              <h1 className="text-4xl font-black tracking-tighter text-slate-800">Clinical Vault</h1>
+              <p className="text-sm font-black uppercase tracking-widest mt-2 text-slate-400">Secure medical repository • Categorized</p>
+            </div>
+            <div className="flex gap-2">
+              <span className="px-5 py-2.5 bg-indigo-50 text-indigo-600 rounded-xl text-[9px] font-black uppercase tracking-widest border border-indigo-100">
+                {medicalReports.filter(r => r.reportType === 'doctor_consultation').length} Consults
+              </span>
+              <span className="px-5 py-2.5 bg-emerald-50 text-emerald-600 rounded-xl text-[9px] font-black uppercase tracking-widest border border-emerald-100">
+                {medicalReports.filter(r => r.reportType === 'ai_intake').length} AI Reports
+              </span>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-10">
+            {/* Doctor Consultations */}
+            <div className="bg-white rounded-[40px] border border-slate-100 p-10 shadow-sm transition-all hover:shadow-xl">
+              <div className="flex items-center gap-4 mb-8">
+                <div className="w-12 h-12 bg-indigo-600 rounded-2xl flex items-center justify-center text-xl shadow-lg shadow-indigo-100">👨‍⚕️</div>
+                <div>
+                  <h3 className="text-xl font-black text-slate-800">Doctor Consultations</h3>
+                  <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Verified clinical summaries & prescriptions</p>
+                </div>
+              </div>
+
+              <div className="space-y-4">
+                {medicalReports.filter(r => r.reportType === 'doctor_consultation').map(r => (
+                  <div key={r.id} className="p-6 bg-slate-50/50 rounded-3xl border border-transparent hover:border-indigo-200 hover:bg-white transition-all group">
+                    <div className="flex justify-between items-start">
+                      <div>
+                        <p className="font-black text-slate-800 group-hover:text-indigo-600 transition-colors">{r.title}</p>
+                        <p className="text-[10px] font-bold text-slate-400 uppercase mt-1">Dr. {r.doctorName} • {r.date}</p>
+                      </div>
+                      <button
+                        onClick={() => handleDownloadReport(r.fileData, r.fileName)}
+                        className="w-10 h-10 bg-white shadow-sm border border-slate-100 rounded-xl flex items-center justify-center text-indigo-600 hover:bg-indigo-600 hover:text-white transition-all"
+                      >
+                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 16v1a2 2 0 002 2h12a2 2 0 002-2v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg>
+                      </button>
+                    </div>
+                  </div>
+                ))}
+                {medicalReports.filter(r => r.reportType === 'doctor_consultation').length === 0 && (
+                  <div className="py-12 text-center opacity-30 select-none">
+                    <div className="text-4xl mb-4">📭</div>
+                    <p className="text-[9px] font-black uppercase tracking-[0.2em] px-10">No verified reports received yet.</p>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* AI Intake Overviews */}
+            <div className="bg-white rounded-[40px] border border-slate-100 p-10 shadow-sm transition-all hover:shadow-xl">
+              <div className="flex items-center gap-4 mb-8">
+                <div className="w-12 h-12 bg-emerald-500 rounded-2xl flex items-center justify-center text-xl shadow-lg shadow-emerald-100">🤖</div>
+                <div>
+                  <h3 className="text-xl font-black text-slate-800">AI Pre-Assessments</h3>
+                  <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Automated intake notes & summaries</p>
+                </div>
+              </div>
+
+              <div className="space-y-4">
+                {medicalReports.filter(r => r.reportType === 'ai_intake').map(r => (
+                  <div key={r.id} className="p-6 bg-slate-50/50 rounded-3xl border border-transparent hover:border-emerald-200 hover:bg-white transition-all group">
+                    <div className="flex justify-between items-start">
+                      <div>
+                        <p className="font-black text-slate-800 group-hover:text-emerald-600 transition-colors">{r.title}</p>
+                        <p className="text-[10px] font-bold text-slate-400 uppercase mt-1">AI Clinical Scribe • {r.date}</p>
+                      </div>
+                      <button
+                        onClick={() => handleDownloadReport(r.fileData, r.fileName)}
+                        className="w-10 h-10 bg-white shadow-sm border border-slate-100 rounded-xl flex items-center justify-center text-emerald-600 hover:bg-emerald-600 hover:text-white transition-all"
+                      >
+                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" /></svg>
+                      </button>
+                    </div>
+                  </div>
+                ))}
+                {medicalReports.filter(r => r.reportType === 'ai_intake').length === 0 && (
+                  <div className="py-12 text-center opacity-30 select-none">
+                    <div className="text-4xl mb-4">🛸</div>
+                    <p className="text-[9px] font-black uppercase tracking-[0.2em] px-10">Initialize an AI intake session to generate reports.</p>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
       {activeTab === 'pharmacy' && <Pharmacy />}
 
       {/* ── Analytics ── */}

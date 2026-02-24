@@ -31,6 +31,11 @@ const MedicalReportSchema = new mongoose.Schema({
         enum: ['patient', 'doctor'],
         required: true
     },
+    reportType: {
+        type: String,
+        enum: ['ai_intake', 'doctor_consultation'],
+        default: 'doctor_consultation'
+    },
     // Base64 file content (MVP — no object storage needed)
     fileData: { type: String, default: '' },
     mimeType: { type: String, default: '' },

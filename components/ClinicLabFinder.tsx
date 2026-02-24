@@ -30,6 +30,9 @@ const ClinicLabFinder: React.FC = () => {
     const [activeCategory, setActiveCategory] = useState('Hospitals');
     const [radius, setRadius] = useState(5000); // 5km
     const [selectedFacility, setSelectedFacility] = useState<Facility | null>(null);
+    const [searchInput, setSearchInput] = useState('');
+    const [isSearchingLocation, setIsSearchingLocation] = useState(false);
+    const [isGpsActive, setIsGpsActive] = useState(true);
 
     const mapRef = useRef<HTMLDivElement>(null);
     const markersRef = useRef<any[]>([]);
@@ -141,6 +144,77 @@ const ClinicLabFinder: React.FC = () => {
             }
         };
     }, []);
+
+    const resetToGps = () => {
+        setIsSearchingLocation(true);
+        navigator.geolocation.getCurrentPosition(
+            (position) => {
+                const pos = {
+                    lat: position.coords.latitude,
+                    lng: position.coords.longitude
+                };
+                setUserLocation(pos);
+                setIsGpsActive(true);
+                setSearchInput('');
+                if (leafletMapRef.current) {
+                    leafletMapRef.current.setView([pos.lat, pos.lng], 14);
+                    // Update user marker if exists, or recreate
+                    leafletMapRef.current.eachLayer((layer: any) => {
+                        if (layer instanceof window.L.CircleMarker && layer.getPopup()?.getContent() === "Your Location") {
+                            layer.setLatLng([pos.lat, pos.lng]);
+                        }
+                    });
+                }
+                setIsSearchingLocation(false);
+            },
+            (err) => {
+                setError(`Failed to get GPS location: ${err.message}`);
+                setIsSearchingLocation(false);
+            }
+        );
+    };
+
+    const handleManualSearch = async (e: React.FormEvent) => {
+        e.preventDefault();
+        const query = searchInput.trim();
+        if (!query) return;
+
+        setIsSearchingLocation(true);
+        setError(null);
+
+        try {
+            const response = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}&limit=1`);
+            const data = await response.json();
+
+            if (data && data.length > 0) {
+                const pos = {
+                    lat: parseFloat(data[0].lat),
+                    lng: parseFloat(data[0].lon)
+                };
+                setUserLocation(pos);
+                setIsGpsActive(false);
+
+                if (leafletMapRef.current) {
+                    leafletMapRef.current.setView([pos.lat, pos.lng], 14);
+
+                    // Update user marker position and label
+                    leafletMapRef.current.eachLayer((layer: any) => {
+                        if (layer instanceof window.L.CircleMarker && layer.getPopup()?.getContent()?.includes("Location")) {
+                            layer.setLatLng([pos.lat, pos.lng]);
+                            layer.bindPopup(`Search Location: ${query}`);
+                        }
+                    });
+                }
+            } else {
+                setError(`Location "${query}" not found. Try Area name or Pincode.`);
+            }
+        } catch (e) {
+            console.error("Geocoding error:", e);
+            setError("Failed to reach search service. Please try again.");
+        } finally {
+            setIsSearchingLocation(false);
+        }
+    };
 
     useEffect(() => {
         if (map && userLocation) {
@@ -260,25 +334,44 @@ const ClinicLabFinder: React.FC = () => {
     return (
         <div className="space-y-10 animate-in fade-in duration-500">
             <div className="flex flex-col md:flex-row justify-between items-center gap-6">
-                <div>
+                <div className="w-full md:w-auto">
                     <h2 className="text-3xl font-black tracking-tight flex items-center text-slate-900">
                         Clinic & Labs Finder
                         {loading && <div className="ml-4 w-2 h-2 bg-blue-500 rounded-full animate-ping"></div>}
                     </h2>
-                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mt-2">Real-time OpenStreetMap Network (100% Free)</p>
+                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mt-2">{isGpsActive ? 'Real-time OpenStreetMap Network' : 'Manual Location Explorer'}</p>
                 </div>
 
-                <div className="flex bg-white p-1.5 rounded-2xl border border-slate-100 shadow-sm overflow-x-auto scrollbar-hide">
-                    {categories.map(cat => (
+                <div className="flex flex-col sm:flex-row w-full md:w-auto gap-4 items-center">
+                    <form onSubmit={handleManualSearch} className="relative flex-1 sm:w-80 group">
+                        <input
+                            type="text"
+                            value={searchInput}
+                            onChange={(e) => setSearchInput(e.target.value)}
+                            placeholder="Search Area or Pincode..."
+                            className="w-full pl-6 pr-12 py-3.5 bg-white border border-slate-100 rounded-2xl text-[10px] font-black uppercase tracking-widest outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-500/5 transition-all shadow-sm group-hover:shadow-md"
+                        />
                         <button
-                            key={cat.id}
-                            onClick={() => setActiveCategory(cat.id)}
-                            className={`px-6 py-3 rounded-xl text-[9px] font-black uppercase tracking-widest transition-all gap-2 flex items-center ${activeCategory === cat.id ? 'bg-[#3b5bfd] text-white shadow-lg shadow-blue-500/20' : 'text-slate-400 hover:bg-slate-50 hover:text-slate-800'}`}
+                            type="submit"
+                            disabled={isSearchingLocation}
+                            className="absolute right-2 top-1.5 bottom-1.5 w-10 bg-slate-50 text-slate-400 hover:bg-blue-600 hover:text-white rounded-xl flex items-center justify-center transition-all disabled:opacity-50"
                         >
-                            <span>{cat.icon}</span>
-                            {cat.id}
+                            {isSearchingLocation ? <div className="w-3 h-3 border-2 border-current border-t-transparent rounded-full animate-spin"></div> : '🔍'}
                         </button>
-                    ))}
+                    </form>
+
+                    <div className="flex bg-white p-1.5 rounded-2xl border border-slate-100 shadow-sm overflow-x-auto scrollbar-hide">
+                        {categories.map(cat => (
+                            <button
+                                key={cat.id}
+                                onClick={() => setActiveCategory(cat.id)}
+                                className={`px-6 py-3 rounded-xl text-[9px] font-black uppercase tracking-widest transition-all gap-2 flex items-center ${activeCategory === cat.id ? 'bg-[#3b5bfd] text-white shadow-lg shadow-blue-500/20' : 'text-slate-400 hover:bg-slate-50 hover:text-slate-800'}`}
+                            >
+                                <span>{cat.icon}</span>
+                                {cat.id}
+                            </button>
+                        ))}
+                    </div>
                 </div>
             </div>
 
@@ -295,12 +388,28 @@ const ClinicLabFinder: React.FC = () => {
                     )}
 
                     {/* Map Overlay Controls */}
-                    <div className="absolute top-8 left-8 p-4 bg-white/90 backdrop-blur-md rounded-2xl border border-slate-100 shadow-lg z-10 pointer-events-none">
-                        <p className="text-[8px] font-black uppercase tracking-widest text-slate-400">GPS Status</p>
-                        <p className="text-[10px] font-black uppercase mt-1 text-green-500 flex items-center gap-2">
-                            <span className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></span>
-                            Live Tracking Active
-                        </p>
+                    <div className="absolute top-8 left-8 p-4 bg-white/90 backdrop-blur-md rounded-2xl border border-slate-100 shadow-lg z-10">
+                        <p className="text-[8px] font-black uppercase tracking-widest text-slate-400">Location Status</p>
+                        <div className="flex items-center justify-between gap-4 mt-1">
+                            {isGpsActive ? (
+                                <p className="text-[10px] font-black uppercase text-green-500 flex items-center gap-2">
+                                    <span className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></span>
+                                    GPS Locked
+                                </p>
+                            ) : (
+                                <p className="text-[10px] font-black uppercase text-amber-500 flex items-center gap-2">
+                                    <span className="w-2 h-2 bg-amber-500 rounded-full animate-pulse"></span>
+                                    Manual Search
+                                </p>
+                            )}
+                            <button
+                                onClick={resetToGps}
+                                disabled={isGpsActive || isSearchingLocation}
+                                className={`text-[8px] font-black uppercase tracking-widest px-2 py-1 rounded-md transition-all ${isGpsActive ? 'text-slate-300 pointer-events-none' : 'text-blue-600 bg-blue-50 hover:bg-blue-600 hover:text-white'}`}
+                            >
+                                Reset to GPS
+                            </button>
+                        </div>
                     </div>
 
                     <div className="absolute bottom-6 right-6 flex flex-col space-y-2 align-end">

@@ -1,6 +1,7 @@
 
 import React, { useState, useMemo, useEffect } from 'react';
-import { User, Appointment, AppointmentStatus, PatientRecord, Payment } from '../types';
+import { jsPDF } from 'jspdf';
+import { User, Appointment, AppointmentStatus, PatientRecord, Payment, MedicalReport } from '../types';
 import {
    PieChart, Pie, Cell, ResponsiveContainer, Tooltip,
    AreaChart, Area, XAxis, YAxis, CartesianGrid,
@@ -13,7 +14,10 @@ interface DoctorDashboardProps {
    payments: Payment[];
    updateStatus: (id: string, status: AppointmentStatus) => void;
    patients: PatientRecord[];
+   medicalReports?: MedicalReport[];
    onUpdatePatient: (patient: PatientRecord) => void;
+   onAddReport?: (report: MedicalReport) => void;
+   onOpenChat?: (appointmentId: string) => void;
    onStartCall?: (patientName: string) => void;
    /** Controlled view driven by Layout sidebar */
    activeView?: string;
@@ -103,12 +107,18 @@ const Toggle: React.FC<{ checked: boolean; onChange: () => void; label?: string 
 );
 
 const DoctorDashboard: React.FC<DoctorDashboardProps> = ({
-   user, appointments, payments, updateStatus, patients, onStartCall,
-   activeView: controlledView, onViewChange,
+   user, appointments, payments, updateStatus, patients, medicalReports = [], onStartCall,
+   onAddReport, onOpenChat, activeView: controlledView, onViewChange,
 }) => {
    const [localView, setLocalView] = useState(controlledView ?? 'Overview');
    const [isBridgeOpen, setIsBridgeOpen] = useState(false);
    const [selectedPatientId, setSelectedPatientId] = useState<string | null>(patients[0]?.id || null);
+
+   // ── Consultation Report State ──────────────────────────────────────────────
+   const [isReportModalOpen, setIsReportModalOpen] = useState(false);
+   const [writingReportFor, setWritingReportFor] = useState<PatientRecord | null>(null);
+   const [reportData, setReportData] = useState({ diagnosis: '', notes: '', prescription: '' });
+   const [isSavingReport, setIsSavingReport] = useState(false);
 
    // ── Theme state persisted in localStorage ──────────────────────────────────
    const [darkMode, setDarkMode] = useState<boolean>(() => {
@@ -132,6 +142,30 @@ const DoctorDashboard: React.FC<DoctorDashboardProps> = ({
       });
    };
 
+   const handleDownloadReport = (base64Data: string, fileName: string) => {
+      try {
+         const base64Content = base64Data.includes('base64,') ? base64Data.split('base64,')[1] : base64Data;
+         const binaryString = window.atob(base64Content);
+         const len = binaryString.length;
+         const bytes = new Uint8Array(len);
+         for (let i = 0; i < len; i++) {
+            bytes[i] = binaryString.charCodeAt(i);
+         }
+         const blob = new Blob([bytes], { type: 'application/pdf' });
+         const url = URL.createObjectURL(blob);
+         const link = document.createElement('a');
+         link.href = url;
+         link.download = fileName;
+         document.body.appendChild(link);
+         link.click();
+         document.body.removeChild(link);
+         URL.revokeObjectURL(url);
+      } catch (e) {
+         console.error("Download failed:", e);
+         alert("Failed to download report.");
+      }
+   };
+
    // Sync when parent (sidebar) changes the view
    useEffect(() => {
       if (controlledView) {
@@ -148,7 +182,6 @@ const DoctorDashboard: React.FC<DoctorDashboardProps> = ({
    const myAppointments = useMemo(() => appointments.filter(a => a.doctorId === user.id), [appointments, user.id]);
    const pendingRequests = myAppointments.filter(a => a.status === AppointmentStatus.PENDING);
    const confirmed = myAppointments.filter(a => a.status === AppointmentStatus.CONFIRMED);
-   const activePatient = patients.find(p => p.id === selectedPatientId) || patients[0];
 
    const vitalsData = useMemo(() => Array.from({ length: 10 }, (_, i) => ({
       day: `D${i + 1}`,
@@ -162,6 +195,151 @@ const DoctorDashboard: React.FC<DoctorDashboardProps> = ({
       revenue: 8000 + Math.random() * 6000,
       visits: 20 + Math.floor(Math.random() * 30),
    })), []);
+
+   const activePatient = useMemo(() => patients.find(p => p.id === selectedPatientId) || patients[0], [patients, selectedPatientId]);
+
+   const renderConsultationModal = () => {
+      if (!writingReportFor) return null;
+      return (
+         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+            <div className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm" onClick={() => setIsReportModalOpen(false)} />
+            <div className={`${T.card} relative w-full max-w-2xl rounded-[48px] shadow-2xl border ${T.cardBorder} p-12 animate-in zoom-in-95 duration-300`}>
+               <div className="flex justify-between items-center mb-10">
+                  <div>
+                     <h2 className={`text-2xl font-black tracking-tight ${T.text}`}>Consultation Report</h2>
+                     <p className={`text-[10px] font-black uppercase tracking-[0.2em] mt-1 ${T.textMuted}`}>Patient: {writingReportFor.name}</p>
+                  </div>
+                  <button onClick={() => setIsReportModalOpen(false)} className={`w-12 h-12 rounded-2xl flex items-center justify-center ${T.inputBg} hover:bg-slate-200 transition-colors`}>×</button>
+               </div>
+
+               <div className="space-y-6">
+                  <div>
+                     <label className={`text-[10px] font-black uppercase tracking-widest ${T.textMuted} mb-3 block`}>Diagnosis</label>
+                     <input
+                        type="text"
+                        placeholder="Primary diagnosis or condition..."
+                        value={reportData.diagnosis}
+                        onChange={e => setReportData({ ...reportData, diagnosis: e.target.value })}
+                        className={`w-full p-5 rounded-2xl border ${T.cardBorder} ${T.inputBg} ${T.text} outline-none focus:border-blue-500 transition-all font-bold text-sm`}
+                     />
+                  </div>
+                  <div>
+                     <label className={`text-[10px] font-black uppercase tracking-widest ${T.textMuted} mb-3 block`}>Clinical Notes</label>
+                     <textarea
+                        rows={4}
+                        placeholder="Detailed observations and notes..."
+                        value={reportData.notes}
+                        onChange={e => setReportData({ ...reportData, notes: e.target.value })}
+                        className={`w-full p-5 rounded-2xl border ${T.cardBorder} ${T.inputBg} ${T.text} outline-none focus:border-blue-500 transition-all font-bold text-sm resize-none`}
+                     />
+                  </div>
+                  <div>
+                     <label className={`text-[10px] font-black uppercase tracking-widest text-blue-500 mb-3 block`}>Prescription (Rx)</label>
+                     <textarea
+                        rows={3}
+                        placeholder="Medications, dosage, and duration..."
+                        value={reportData.prescription}
+                        onChange={e => setReportData({ ...reportData, prescription: e.target.value })}
+                        className={`w-full p-5 rounded-2xl border border-blue-100 bg-blue-50/30 text-[#1e293b] outline-none focus:border-blue-500 transition-all font-bold text-sm resize-none shadow-inner`}
+                     />
+                  </div>
+               </div>
+
+               <div className="mt-12 flex gap-4">
+                  <button
+                     onClick={() => setIsReportModalOpen(false)}
+                     className={`flex-1 py-5 rounded-[24px] text-[10px] font-black uppercase tracking-widest ${T.textMuted} hover:bg-slate-100 transition-all`}
+                  >
+                     Cancel
+                  </button>
+                  <button
+                     onClick={handleSaveConsultationReport}
+                     disabled={isSavingReport || !reportData.diagnosis}
+                     className="flex-[2] py-5 bg-blue-600 text-white rounded-[24px] text-[10px] font-black uppercase tracking-widest shadow-2xl shadow-blue-500/20 hover:scale-[1.02] active:scale-95 transition-all disabled:opacity-50"
+                  >
+                     {isSavingReport ? 'Generating PDF...' : 'Finalize & Save Report'}
+                  </button>
+               </div>
+            </div>
+         </div>
+      );
+   };
+
+   const handleSaveConsultationReport = async () => {
+      if (!writingReportFor) return;
+      setIsSavingReport(true);
+
+      const doc = new jsPDF();
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(22);
+      doc.setTextColor(59, 91, 253);
+      doc.text("CAYR CLINICAL CONSULTATION", 20, 30);
+
+      doc.setFontSize(10);
+      doc.setTextColor(100, 116, 139);
+      doc.text(`Consultation Date: ${new Date().toLocaleString()}`, 20, 38);
+      doc.text(`Provider: Dr. ${user.name}`, 20, 44);
+
+      doc.setDrawColor(239, 242, 246);
+      doc.line(20, 50, 190, 50);
+
+      doc.setFontSize(12);
+      doc.setTextColor(30, 41, 59);
+      doc.text("PATIENT SUMMARY", 20, 60);
+      doc.setFont("helvetica", "normal");
+      doc.text(`Name: ${writingReportFor.name}`, 20, 67);
+      doc.text(`Age/Blood: ${writingReportFor.age}y / ${writingReportFor.bloodType}`, 20, 74);
+
+      doc.setFont("helvetica", "bold");
+      doc.text("DIAGNOSIS", 20, 88);
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(10);
+      const splitDiagnosis = doc.splitTextToSize(reportData.diagnosis, 170);
+      doc.text(splitDiagnosis, 20, 95);
+
+      const notesY = 95 + (splitDiagnosis.length * 5) + 10;
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(12);
+      doc.text("CLINICAL NOTES", 20, notesY);
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(10);
+      const splitNotes = doc.splitTextToSize(reportData.notes, 170);
+      doc.text(splitNotes, 20, notesY + 7);
+
+      const prescY = notesY + 7 + (splitNotes.length * 5) + 15;
+      doc.setFillColor(248, 250, 252);
+      doc.rect(20, prescY - 8, 170, 40, 'F');
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(12);
+      doc.setTextColor(59, 91, 253);
+      doc.text("PRESCRIPTION (Rx)", 25, prescY);
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(10);
+      doc.setTextColor(30, 41, 59);
+      const splitPresc = doc.splitTextToSize(reportData.prescription, 160);
+      doc.text(splitPresc, 25, prescY + 7);
+
+      const fileData = doc.output('datauristring');
+
+      const report: any = {
+         patientId: writingReportFor.id,
+         title: "Consultation Report",
+         description: reportData.diagnosis,
+         reportType: 'doctor_consultation',
+         uploadedBy: 'doctor',
+         fileName: `Consultation_${writingReportFor.name.replace(/\s+/g, '_')}_${Date.now()}.pdf`,
+         fileData: fileData,
+         findings: reportData.notes,
+         type: "Consultation Note"
+      };
+
+      if (onAddReport) await onAddReport(report);
+
+      setIsSavingReport(false);
+      setIsReportModalOpen(false);
+      setWritingReportFor(null);
+      setReportData({ diagnosis: '', notes: '', prescription: '' });
+   };
 
    // ── Overview ──────────────────────────────────────────────────────────────
    const renderOverview = () => (
@@ -334,36 +512,80 @@ const DoctorDashboard: React.FC<DoctorDashboardProps> = ({
             <p className={`text-sm font-black uppercase tracking-widest mt-2 ${T.textMuted}`}>{patients.length} active records</p>
          </div>
          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-            {patients.map(p => (
-               <div key={p.id} className={`${T.card} border ${T.cardBorder} rounded-[36px] p-8 hover:shadow-xl hover:border-blue-100 transition-all group`}>
-                  <div className="flex items-center gap-5 mb-6">
-                     <div className={`w-16 h-16 rounded-[20px] overflow-hidden border ${T.cardBorder} ${T.inputBg}`}>
-                        <img src={`https://api.dicebear.com/7.x/avataaars/svg?seed=${p.name}`} alt="" />
-                     </div>
-                     <div>
-                        <p className={`font-black text-lg leading-tight ${T.text}`}>{p.name}</p>
-                        <p className={`text-[9px] font-black uppercase tracking-widest mt-1 ${T.textMuted}`}>{p.age}y • {p.bloodType}</p>
-                     </div>
-                  </div>
-                  <div className="grid grid-cols-2 gap-3">
-                     {[
-                        { label: 'Diagnoses', value: p.history?.length ?? 0 },
-                        { label: 'Medications', value: p.currentMedications?.length ?? 0 },
-                        { label: 'Allergies', value: p.allergies?.length ?? 0 },
-                        { label: 'Status', value: p.status ?? 'OK' },
-                     ].map((item, i) => (
-                        <div key={i} className={`${T.inputBg} rounded-2xl px-4 py-3`}>
-                           <p className={`text-[9px] font-black uppercase tracking-widest ${T.textMuted}`}>{item.label}</p>
-                           <p className={`font-black mt-0.5 ${T.text}`}>{item.value}</p>
+            {patients.map(p => {
+               const lastAppt = appointments.filter(a => a.patientId === p.id).sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())[0];
+               const aiReports = medicalReports.filter(r => r.patientId === p.id && r.reportType === 'ai_intake');
+               const docReports = medicalReports.filter(r => r.patientId === p.id && r.reportType === 'doctor_consultation');
+
+               return (
+                  <div key={p.id} className={`${T.card} border ${T.cardBorder} rounded-[36px] p-8 hover:shadow-xl hover:border-blue-100 transition-all group relative overflow-hidden`}>
+                     <div className="flex items-center gap-5 mb-6">
+                        <div className={`w-16 h-16 rounded-[20px] overflow-hidden border ${T.cardBorder} ${T.inputBg}`}>
+                           <img src={`https://api.dicebear.com/7.x/avataaars/svg?seed=${p.name}`} alt="" />
                         </div>
-                     ))}
+                        <div>
+                           <p className={`font-black text-lg leading-tight ${T.text}`}>{p.name}</p>
+                           <p className={`text-[9px] font-black uppercase tracking-widest mt-1 ${T.textMuted}`}>{p.age}y • {p.bloodType}</p>
+                        </div>
+                        <button
+                           onClick={() => lastAppt && onOpenChat?.(lastAppt.id)}
+                           className={`ml-auto w-10 h-10 rounded-xl flex items-center justify-center transition-all shadow-sm ${lastAppt ? 'bg-blue-50 text-blue-600 hover:bg-blue-600 hover:text-white' : 'bg-slate-50 text-slate-300 cursor-not-allowed'}`}
+                           title={lastAppt ? "Chat with Patient" : "No active appointment for chat"}
+                           disabled={!lastAppt}
+                        >
+                           <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" /></svg>
+                        </button>
+                     </div>
+
+                     <div className="space-y-4">
+                        <div className={`${T.inputBg} rounded-2xl p-4 border ${T.cardBorder}`}>
+                           <p className={`text-[9px] font-black uppercase tracking-widest ${T.textMuted}`}>Last Appointment</p>
+                           <p className={`font-black mt-1 text-sm ${T.text}`}>{lastAppt ? `${lastAppt.date} @ ${lastAppt.time}` : 'No sessions recorded'}</p>
+                        </div>
+
+                        <div className="grid grid-cols-2 gap-3">
+                           <div className={`${docReports.length > 0 ? 'bg-indigo-50 border-indigo-100' : T.inputBg} border rounded-2xl p-3 transition-colors relative group/rep`}>
+                              <p className={`text-[8px] font-black uppercase tracking-widest ${T.textMuted}`}>Consults</p>
+                              <p className={`font-black text-xs ${T.text}`}>{docReports.length} Files</p>
+                              {docReports.length > 0 && (
+                                 <button
+                                    onClick={() => handleDownloadReport(docReports[0].fileData, docReports[0].fileName)}
+                                    className="absolute inset-0 flex items-center justify-center bg-indigo-600/10 opacity-0 group-hover/rep:opacity-100 transition-opacity rounded-2xl"
+                                    title="Download Latest"
+                                 >
+                                    <span className="bg-white p-1.5 rounded-lg shadow-sm text-indigo-600 text-[8px] font-black">⬇️ GET</span>
+                                 </button>
+                              )}
+                           </div>
+                           <div className={`${aiReports.length > 0 ? 'bg-emerald-50 border-emerald-100' : T.inputBg} border rounded-2xl p-3 transition-colors relative group/ai`}>
+                              <p className={`text-[8px] font-black uppercase tracking-widest ${T.textMuted}`}>AI Intake</p>
+                              <p className={`font-black text-xs ${T.text}`}>{aiReports.length} Files</p>
+                              {aiReports.length > 0 && (
+                                 <button
+                                    onClick={() => handleDownloadReport(aiReports[0].fileData, aiReports[0].fileName)}
+                                    className="absolute inset-0 flex items-center justify-center bg-emerald-600/10 opacity-0 group-hover/ai:opacity-100 transition-opacity rounded-2xl"
+                                    title="Download Latest"
+                                 >
+                                    <span className="bg-white p-1.5 rounded-lg shadow-sm text-emerald-600 text-[8px] font-black">⬇️ GET</span>
+                                 </button>
+                              )}
+                           </div>
+                        </div>
+                     </div>
+
+                     <div className="mt-6 flex gap-3">
+                        <button onClick={() => { setSelectedPatientId(p.id); setView('My Patients'); }}
+                           className="flex-1 py-4 bg-slate-900 text-white rounded-2xl text-[9px] font-black uppercase tracking-widest hover:bg-slate-800 transition-colors shadow-lg shadow-slate-200">
+                           Clinical Chart
+                        </button>
+                        <button onClick={() => { setWritingReportFor(p); setIsReportModalOpen(true); }}
+                           className="flex-1 py-4 bg-blue-600 text-white rounded-2xl text-[9px] font-black uppercase tracking-widest hover:bg-blue-700 transition-colors shadow-lg shadow-blue-200">
+                           Issue Report
+                        </button>
+                     </div>
                   </div>
-                  <button onClick={() => { setSelectedPatientId(p.id); setView('My Patients'); }}
-                     className="mt-6 w-full py-4 bg-blue-50 text-blue-600 rounded-2xl text-[10px] font-black uppercase tracking-widest hover:bg-blue-100 transition-colors group-hover:bg-blue-600 group-hover:text-white">
-                     View Clinical Chart →
-                  </button>
-               </div>
-            ))}
+               );
+            })}
          </div>
       </div>
    );
@@ -572,6 +794,56 @@ const DoctorDashboard: React.FC<DoctorDashboardProps> = ({
                      </div>
                   </div>
                </div>
+
+               <div className="mt-10 border-t pt-10 border-slate-100">
+                  <h4 className={`text-[10px] font-black uppercase tracking-widest ${T.textMuted} mb-8`}>Clinical Archive (Vault)</h4>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                     <div>
+                        <p className={`text-[11px] font-black uppercase tracking-widest text-indigo-500 mb-4 flex items-center`}>
+                           <span className="w-1.5 h-1.5 bg-indigo-500 rounded-full mr-2" />
+                           Consultation Reports
+                        </p>
+                        <div className="space-y-3">
+                           {medicalReports.filter(r => r.patientId === activePatient?.id && r.reportType === 'doctor_consultation').map(r => (
+                              <div key={r.id} className={`${T.card} p-5 rounded-3xl border ${T.cardBorder} flex items-center justify-between hover:border-indigo-200 transition-all`}>
+                                 <div>
+                                    <p className={`text-xs font-black ${T.text}`}>{r.title}</p>
+                                    <p className={`text-[9px] font-bold uppercase tracking-widest ${T.textMuted}`}>{r.date}</p>
+                                 </div>
+                                 <a href={r.fileData} download={r.fileName} className="w-10 h-10 rounded-xl bg-indigo-50 text-indigo-600 flex items-center justify-center hover:bg-indigo-600 hover:text-white transition-all">
+                                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 16v1a2 2 0 002 2h12a2 2 0 002-2v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg>
+                                 </a>
+                              </div>
+                           ))}
+                           {medicalReports.filter(r => r.patientId === activePatient?.id && r.reportType === 'doctor_consultation').length === 0 && (
+                              <p className={`text-[10px] italic ${T.textMuted} opacity-60 px-2`}>No consultations issued yet.</p>
+                           )}
+                        </div>
+                     </div>
+                     <div>
+                        <p className={`text-[11px] font-black uppercase tracking-widest text-emerald-500 mb-4 flex items-center`}>
+                           <span className="w-1.5 h-1.5 bg-emerald-500 rounded-full mr-2" />
+                           AI Intake Overviews
+                        </p>
+                        <div className="space-y-3">
+                           {medicalReports.filter(r => r.patientId === activePatient?.id && r.reportType === 'ai_intake').map(r => (
+                              <div key={r.id} className={`${T.card} p-5 rounded-3xl border ${T.cardBorder} flex items-center justify-between hover:border-emerald-200 transition-all`}>
+                                 <div>
+                                    <p className={`text-xs font-black ${T.text}`}>{r.title}</p>
+                                    <p className={`text-[9px] font-bold uppercase tracking-widest ${T.textMuted}`}>{r.date}</p>
+                                 </div>
+                                 <a href={r.fileData} download={r.fileName} className="w-10 h-10 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center hover:bg-emerald-600 hover:text-white transition-all">
+                                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" /></svg>
+                                 </a>
+                              </div>
+                           ))}
+                           {medicalReports.filter(r => r.patientId === activePatient?.id && r.reportType === 'ai_intake').length === 0 && (
+                              <p className={`text-[10px] italic ${T.textMuted} opacity-60 px-2`}>No AI assessments found.</p>
+                           )}
+                        </div>
+                     </div>
+                  </div>
+               </div>
             </div>
          </div>
          {isBridgeOpen && <MultilingualBridge partnerName="Patient" onClose={() => setIsBridgeOpen(false)} />}
@@ -766,25 +1038,17 @@ const DoctorDashboard: React.FC<DoctorDashboardProps> = ({
    // ── Root render ───────────────────────────────────────────────────────────
    return (
       <div className={`max-w-[1440px] mx-auto pb-20 transition-colors duration-300`}>
-         {/* Top tab bar */}
-         <nav className={`flex flex-wrap gap-2 ${darkMode ? 'bg-[#1a1d27]/80' : 'bg-white/50'} backdrop-blur-md p-1.5 rounded-[28px] border ${darkMode ? 'border-[#2a2d3a]/50' : 'border-white/50'} mb-10 w-fit`}>
-            {TOP_TABS.map(t => (
-               <button key={t.id} onClick={() => setView(t.id)}
-                  className={`px-5 py-3.5 rounded-2xl text-[10px] font-black uppercase tracking-[0.2em] transition-all flex items-center space-x-2.5 ${localView === t.id ? T.tabActive : T.tabInactive}`}>
-                  <span>{t.icon}</span>
-                  <span className="hidden sm:inline">{t.label}</span>
-               </button>
-            ))}
-            {/* Inline dark mode toggle in tab bar */}
+         {/* Inline dark mode toggle moved to a better spot or keeping it hidden if needed, but for now just removing the redundant nav */}
+         <div className="flex justify-end mb-6">
             <button
                onClick={toggleDark}
                title={darkMode ? 'Switch to light mode' : 'Switch to dark mode'}
-               className={`ml-2 px-4 py-3.5 rounded-2xl text-[10px] font-black uppercase tracking-[0.2em] transition-all border ${darkMode ? 'border-[#2a2d3a] text-slate-300 hover:bg-[#252836]' : 'border-slate-200 text-slate-400 hover:bg-slate-100'}`}
+               className={`px-4 py-2 rounded-2xl text-[10px] font-black uppercase tracking-[0.2em] transition-all border ${darkMode ? 'border-[#2a2d3a] text-slate-300 hover:bg-[#252836]' : 'border-slate-200 text-slate-400 hover:bg-slate-100'}`}
                aria-label="Toggle dark/light mode"
             >
-               {darkMode ? '☀️' : '🌙'}
+               {darkMode ? '☀️ Light' : '🌙 Dark'}
             </button>
-         </nav>
+         </div>
 
          {localView === 'Overview' && renderOverview()}
          {localView === 'Appointment' && renderAppointments()}
@@ -793,6 +1057,7 @@ const DoctorDashboard: React.FC<DoctorDashboardProps> = ({
          {localView === 'Analytics' && renderAnalytics()}
          {localView === 'Payments' && renderPayments()}
          {localView === 'Settings' && renderSettings()}
+         {isReportModalOpen && renderConsultationModal()}
       </div>
    );
 };

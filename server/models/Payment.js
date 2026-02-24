@@ -1,13 +1,9 @@
 import mongoose from 'mongoose';
 
-const AppointmentSchema = new mongoose.Schema({
+const PaymentSchema = new mongoose.Schema({
     patientId: {
         type: mongoose.Schema.Types.ObjectId,
         ref: 'User',
-        required: true
-    },
-    patientName: {
-        type: String,
         required: true
     },
     doctorId: {
@@ -15,34 +11,27 @@ const AppointmentSchema = new mongoose.Schema({
         ref: 'User',
         required: true
     },
-    doctorName: {
-        type: String,
+    appointmentId: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'Appointment',
         required: true
     },
-    date: {
-        type: String,
-        required: true
-    },
-    time: {
-        type: String,
+    amount: {
+        type: Number,
         required: true
     },
     status: {
         type: String,
-        enum: ['pending', 'confirmed', 'completed', 'cancelled'],
+        enum: ['pending', 'completed', 'failed'],
         default: 'pending'
     },
-    consultationLink: {
+    provider: {
+        type: String,
+        default: 'mock'
+    },
+    providerPaymentId: {
         type: String,
         default: ''
-    },
-    notes: {
-        type: String,
-        default: ''
-    },
-    paymentRequired: {
-        type: Boolean,
-        default: false
     },
     createdAt: {
         type: Date,
@@ -50,4 +39,4 @@ const AppointmentSchema = new mongoose.Schema({
     }
 });
 
-export default mongoose.model('Appointment', AppointmentSchema);
+export default mongoose.model('Payment', PaymentSchema);

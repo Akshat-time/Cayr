@@ -4,20 +4,28 @@ import { protect, requireRole } from '../middleware/authMiddleware.js';
 
 const router = express.Router();
 
-// POST / — Doctor uploads report for a patient (JSON, no file for now)
-router.post('/', protect, requireRole('doctor'), async (req, res) => {
+// POST / — Upload report (can be AI report by patient or consultation by doctor)
+router.post('/', protect, async (req, res) => {
     try {
-        const { patientId, title, description, fileUrl } = req.body;
-        if (!patientId) return res.status(400).json({ error: 'patientId is required' });
+        const { patientId, title, description, fileName, fileUrl, fileData, reportType, medications } = req.body;
+
+        // If patient, they can only upload for themselves
+        const effectivePatientId = req.user.role === 'patient' ? req.user.id : patientId;
+        if (!effectivePatientId) return res.status(400).json({ error: 'patientId is required' });
 
         const report = new MedicalReport({
-            patientId,
-            doctorId: req.user.id,
-            title: title || 'Medical Report',
+            patientId: effectivePatientId,
+            doctorId: req.user.role === 'doctor' ? req.user.id : undefined,
+            title: title || (reportType === 'ai_intake' ? 'AI Intake Report' : 'Medical Report'),
             description: description || '',
-            fileName: title || 'report',
+            fileName: fileName || title || 'report',
             fileUrl: fileUrl || '#',
-            uploadedBy: 'doctor'
+            fileData: fileData || '',
+            reportType: reportType || (req.user.role === 'doctor' ? 'doctor_consultation' : 'ai_intake'),
+            uploadedBy: req.user.role,
+            extractedSummary: {
+                medications: medications || []
+            }
         });
 
         await report.save();
@@ -39,10 +47,22 @@ router.get('/patient', protect, requireRole('patient'), async (req, res) => {
     }
 });
 
-// GET /doctor — Doctor views reports they uploaded
+// GET /doctor — Doctor views reports for all their patients
 router.get('/doctor', protect, requireRole('doctor'), async (req, res) => {
     try {
-        const reports = await MedicalReport.find({ doctorId: req.user.id })
+        const { patientId } = req.query;
+        let query = {};
+
+        if (patientId) {
+            // If specific patient requested, show their reports
+            query = { patientId };
+        } else {
+            // Default: show reports where this doctor is assigned 
+            // OR if the patient has an appointment with this doctor (more complex, for MVP let's allow visibility)
+            query = { doctorId: req.user.id };
+        }
+
+        const reports = await MedicalReport.find(query)
             .populate('patientId', 'name email')
             .sort({ createdAt: -1 });
         res.json(reports);

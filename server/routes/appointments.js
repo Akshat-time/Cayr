@@ -1,8 +1,17 @@
 import express from 'express';
 import Appointment from '../models/Appointment.js';
+import ChatSession from '../models/ChatSession.js';
+import DoctorProfile from '../models/DoctorProfile.js';
 import { protect, requireRole } from '../middleware/authMiddleware.js';
 
 const router = express.Router();
+
+const calculatePriceDetails = (fee) => {
+    const baseFee = fee || 0;
+    const tax = Math.round(baseFee * 0.1);
+    const total = baseFee + tax;
+    return { baseFee, tax, total };
+};
 
 // POST / — Book appointment (Patient)
 router.post('/', protect, requireRole('patient'), async (req, res) => {
@@ -32,8 +41,24 @@ router.post('/', protect, requireRole('patient'), async (req, res) => {
 // GET /patient — Patient's own appointments
 router.get('/patient', protect, requireRole('patient'), async (req, res) => {
     try {
-        const appointments = await Appointment.find({ patientId: req.user.id }).sort({ createdAt: -1 });
-        res.json(appointments);
+        const appointments = await Appointment.find({ patientId: req.user.id }).sort({ createdAt: -1 }).lean();
+
+        // Populate doctor info and prices
+        const enriched = await Promise.all(appointments.map(async (appt) => {
+            const profile = await DoctorProfile.findOne({ userId: appt.doctorId }).lean();
+            return {
+                ...appt,
+                id: appt._id, // Add id for frontend compatibility if missing
+                doctorProfile: profile ? {
+                    specialization: profile.specialization,
+                    consultationFee: profile.consultationFee,
+                    clinicName: profile.clinicName
+                } : null,
+                priceDetails: calculatePriceDetails(profile?.consultationFee)
+            };
+        }));
+
+        res.json(enriched);
     } catch (err) {
         res.status(500).json({ error: err.message });
     }
@@ -60,8 +85,22 @@ router.patch('/:id/confirm', protect, requireRole('doctor'), async (req, res) =>
 
         appointment.status = 'confirmed';
         appointment.consultationLink = `https://meet.cayr.io/${appointment._id}`;
+        appointment.paymentRequired = true;
         await appointment.save();
-        res.json(appointment);
+
+        const profile = await DoctorProfile.findOne({ userId: appointment.doctorId }).lean();
+        const responseData = {
+            ...appointment.toObject(),
+            id: appointment._id,
+            doctorProfile: profile ? {
+                specialization: profile.specialization,
+                consultationFee: profile.consultationFee,
+                clinicName: profile.clinicName
+            } : null,
+            priceDetails: calculatePriceDetails(profile?.consultationFee)
+        };
+
+        res.json(responseData);
     } catch (err) {
         res.status(500).json({ error: err.message });
     }
@@ -78,6 +117,17 @@ router.patch('/:id/complete', protect, requireRole('doctor'), async (req, res) =
 
         appointment.status = 'completed';
         await appointment.save();
+
+        // Expire chat 5 hours from now
+        const expiresAt = new Date();
+        expiresAt.setHours(expiresAt.getHours() + 5);
+
+        await ChatSession.findOneAndUpdate(
+            { appointmentId: req.params.id },
+            { expiresAt, isActive: true },
+            { upsert: true }
+        );
+
         res.json(appointment);
     } catch (err) {
         res.status(500).json({ error: err.message });

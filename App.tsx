@@ -14,6 +14,7 @@ import PatientDetailModal from './components/PatientDetailModal';
 import PatientRegisterForm from './components/PatientRegisterForm';
 import DoctorRegisterForm from './components/DoctorRegisterForm';
 import PatientIntakeForm from './components/PatientIntakeForm';
+import ChatSessionContainer from './components/ChatSessionContainer';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import {
   User, UserRole, Appointment, AppointmentStatus,
@@ -239,6 +240,7 @@ const AppContent: React.FC = () => {
     { id: 'n2', type: NotificationType.PRESCRIPTION, title: 'Clinical Summary Ready', message: 'Your SOAP note has been generated.', timestamp: new Date(Date.now() - 3600000).toISOString(), isRead: false },
   ]);
   const [activeCall, setActiveCall] = useState<{ partnerName: string; partnerRole: string } | null>(null);
+  const [activeChatAppointmentId, setActiveChatAppointmentId] = useState<string | null>(null);
   const [selectedDetailedPatient, setSelectedDetailedPatient] = useState<PatientRecord | null>(null);
   const [isModalLoading, setIsModalLoading] = useState(false);
   const [currentModule, setCurrentModule] = useState('Overview');
@@ -450,12 +452,17 @@ const AppContent: React.FC = () => {
               user={user} appointments={appointments} medicalReports={medicalReports}
               prescriptions={prescriptions} payments={payments}
               onBook={handleBookAppointment} onAddReport={handleAddReport}
+              onOpenChat={setActiveChatAppointmentId}
               onUploadPrescription={presc => setPrescriptions(prev => [presc, ...prev])}
               view={(() => {
                 const map: Record<string, 'dashboard' | 'analytics' | 'payments' | 'reports' | 'reminders' | 'facilities' | 'booking' | 'pharmacy'> = {
                   'Dashboard': 'dashboard',
                   'Analytics': 'analytics',
                   'Payments': 'payments',
+                  'Visits': 'booking',
+                  'Facilities': 'facilities',
+                  'Clinical Vault': 'reports',
+                  'Pharmacy': 'pharmacy',
                 };
                 return map[currentModule] ?? 'dashboard';
               })()}
@@ -470,8 +477,11 @@ const AppContent: React.FC = () => {
             <DoctorDashboard
               user={user} appointments={appointments} payments={payments}
               updateStatus={handleUpdateAppointmentStatus}
-              patients={patients} onUpdatePatient={handleUpdatePatient}
+              patients={patients} medicalReports={medicalReports}
+              onUpdatePatient={handleUpdatePatient}
               onStartCall={n => setActiveCall({ partnerName: n, partnerRole: 'Patient' })}
+              onAddReport={handleAddReport}
+              onOpenChat={setActiveChatAppointmentId}
               activeView={currentModule}
               onViewChange={setCurrentModule}
             />
@@ -533,6 +543,17 @@ const AppContent: React.FC = () => {
       </Routes>
 
       {activeCall && <VideoCall partnerName={activeCall.partnerName} partnerRole={activeCall.partnerRole} onEnd={() => setActiveCall(null)} />}
+
+      {activeChatAppointmentId && (
+        <div className="fixed bottom-6 right-6 z-[100] w-full max-w-md animate-in slide-in-from-bottom-10 duration-500">
+          <ChatSessionContainer
+            appointmentId={activeChatAppointmentId}
+            currentUserId={user?.id || ''}
+            onClose={() => setActiveChatAppointmentId(null)}
+          />
+        </div>
+      )}
+
       {selectedDetailedPatient && (
         <PatientDetailModal
           patient={selectedDetailedPatient} isLoading={isModalLoading}
