@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 
 const MEDICINES = [
@@ -30,39 +29,55 @@ const Pharmacy: React.FC = () => {
     }, 0);
 
     return (
-        <div className="space-y-8 animate-in fade-in duration-500">
-            <div className="flex justify-between items-center bg-emerald-50 p-8 rounded-[40px] border border-emerald-100">
+        <div className="space-y-10 animate-in fade-in duration-500">
+            <div className="flex items-center gap-8 animate-in slide-in-from-left duration-700">
+                <img src="/pharmacy-removebg-preview.png" alt="Pharmacy" className="h-24 w-24 md:h-28 md:w-28 object-contain filter drop-shadow-2xl" />
                 <div>
-                    <h2 className="text-3xl font-black text-emerald-900 tracking-tight">Cayr Pharmacy</h2>
-                    <p className="text-[10px] font-black uppercase tracking-widest text-emerald-600 mt-2">Verified Clinical Dispensary</p>
+                    <h1 className="text-[32px] md:text-[40px] font-black text-white tracking-tight leading-none uppercase">Pharmacy</h1>
+                    <p className="text-[14px] font-medium text-blue-100/60 mt-2 uppercase tracking-widest">Direct clinical supply chain active</p>
                 </div>
-                <div className="text-right">
-                    <div className="text-2xl font-black text-emerald-900">${total.toFixed(2)}</div>
-                    <button disabled={cart.length === 0} onClick={() => setIsCheckout(true)} className="mt-2 px-6 py-3 bg-emerald-600 text-white rounded-2xl text-[10px] font-black uppercase tracking-widest shadow-lg shadow-emerald-200 hover:bg-emerald-700 transition-all disabled:opacity-50 disabled:grayscale">
-                        {isCheckout ? 'Processing...' : `Checkout (${cart.reduce((a, b) => a + b.qty, 0)})`}
+            </div>
+            <div className="bg-white rounded-[20px] p-6 shadow-[0_10px_30px_rgba(0,0,0,0.15)] flex justify-between items-center border border-white/5">
+                <div className="flex items-center space-x-6">
+                    <div className="w-14 h-14 bg-emerald-50 text-emerald-600 rounded-[14px] flex items-center justify-center text-3xl">💊</div>
+                    <div>
+                        <h2 className="text-[18px] font-bold text-slate-900">Medical Cart</h2>
+                        <p className="text-[14px] font-medium text-slate-500 mt-1">{cart.reduce((a, b) => a + b.qty, 0)} items selected</p>
+                    </div>
+                </div>
+                <div className="text-right flex items-center space-x-6">
+                    <div className="text-[24px] font-bold text-slate-900 leading-none">${total.toFixed(2)}</div>
+                    <button
+                        disabled={cart.length === 0}
+                        onClick={() => setIsCheckout(true)}
+                        className="px-8 py-3 bg-gradient-to-r from-emerald-500 to-teal-600 text-white rounded-[14px] text-[14px] font-bold shadow-lg shadow-emerald-500/20 hover:scale-[1.02] transition-all disabled:opacity-50 disabled:grayscale"
+                    >
+                        {isCheckout ? 'Processing...' : 'Checkout Now'}
                     </button>
                 </div>
             </div>
 
             {isCheckout ? (
-                <div className="p-20 text-center bg-white rounded-[40px] border border-slate-100 shadow-sm">
-                    <div className="text-6xl mb-6">✅</div>
-                    <h3 className="text-2xl font-black text-slate-800">Order Dispatched</h3>
-                    <p className="text-slate-500 font-medium mt-2">Your medication will be delivered to your registered address within 24 hours.</p>
-                    <button onClick={() => { setIsCheckout(false); setCart([]); }} className="mt-8 px-8 py-4 bg-slate-900 text-white rounded-2xl font-black uppercase tracking-widest text-xs">Return to Store</button>
+                <div className="p-20 text-center bg-white rounded-[20px] shadow-[0_10px_30px_rgba(0,0,0,0.15)] border border-slate-50 animate-in zoom-in-95">
+                    <div className="w-20 h-20 bg-emerald-50 text-emerald-500 rounded-[14px] flex items-center justify-center text-4xl mx-auto mb-6">✅</div>
+                    <h3 className="text-[24px] font-bold text-slate-900">Order Dispatched</h3>
+                    <p className="text-[16px] font-medium text-slate-500 mt-2">Your medication will be delivered within 24 hours.</p>
+                    <button onClick={() => { setIsCheckout(false); setCart([]); }} className="mt-8 px-10 py-4 bg-slate-900 text-white rounded-[14px] font-bold text-[14px] hover:bg-slate-800 transition-all">Return to Store</button>
                 </div>
             ) : (
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                     {MEDICINES.map(med => (
-                        <div key={med.id} className="bg-white p-6 rounded-[32px] border border-slate-100 hover:shadow-xl hover:border-emerald-200 transition-all group">
-                            <div className="flex justify-between items-start mb-4">
-                                <div className="w-12 h-12 bg-emerald-50 rounded-2xl flex items-center justify-center text-xl text-emerald-600 font-black">💊</div>
-                                <span className="text-lg font-black text-slate-900">${med.price}</span>
+                        <div key={med.id} className="bg-white p-6 rounded-[20px] shadow-[0_10px_30px_rgba(0,0,0,0.15)] border border-slate-50 hover:border-emerald-200 transition-all group flex flex-col justify-between min-h-[320px]">
+                            <div>
+                                <div className="flex justify-between items-start mb-6">
+                                    <div className="w-12 h-12 bg-slate-50 rounded-[12px] flex items-center justify-center text-xl">💊</div>
+                                    <span className="text-[18px] font-bold text-emerald-600">${med.price}</span>
+                                </div>
+                                <h3 className="text-[18px] font-bold text-slate-900 tracking-tight leading-tight">{med.name}</h3>
+                                <p className="text-[13px] font-bold text-slate-400 mt-1 mb-4">{med.dose}</p>
+                                <p className="text-[14px] font-medium text-slate-500 leading-relaxed line-clamp-2">{med.description}</p>
                             </div>
-                            <h3 className="text-xl font-black text-slate-800 tracking-tight">{med.name}</h3>
-                            <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mt-1">{med.dose}</p>
-                            <p className="text-xs text-slate-500 mt-4 leading-relaxed line-clamp-2">{med.description}</p>
-                            <button onClick={() => addToCart(med.id)} className="w-full mt-6 py-4 bg-slate-900 text-white rounded-2xl text-[10px] font-black uppercase tracking-widest group-hover:bg-emerald-600 transition-colors">
+                            <button onClick={() => addToCart(med.id)} className="w-full mt-8 py-4 bg-slate-50 text-slate-700 rounded-[14px] text-[13px] font-bold hover:bg-emerald-600 hover:text-white transition-all">
                                 Add to Cart
                             </button>
                         </div>

@@ -245,3 +245,12 @@ export interface Appointment {
     total: number;
   };
 }
+export interface Message {
+  id: string;
+  appointmentId: string;
+  senderId: string;
+  senderName: string;
+  content: string;
+  timestamp: string;
+  type: 'text' | 'system' | 'video';
+}

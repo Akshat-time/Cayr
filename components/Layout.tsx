@@ -12,6 +12,8 @@ interface LayoutProps {
   onModuleChange: (module: string) => void;
   appointments?: Appointment[];
   notifications?: Notification[];
+  isDrawerMode?: boolean;
+  onToggleDrawerMode?: () => void;
 }
 
 const SidebarIcon = ({ name }: { name: string }) => {
@@ -31,17 +33,21 @@ const SidebarIcon = ({ name }: { name: string }) => {
     'Pharmacy': <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M19.428 15.428a2 2 0 00-1.022-.547l-2.387-.477a6 6 0 00-3.86.517l-.691.387a6 6 0 01-3.86.517l-2.387-.477a2 2 0 00-1.022.547l-1.162.775a2 2 0 00-.733 2.525l1.658 3.317a2 2 0 002.525.733l.775-1.162a2 2 0 012.387-.477l2.387.477a2 2 0 002.525-.733l1.162-2.324a2 2 0 00-.547-2.387z" /></svg>,
     'Directory': <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" /></svg>,
     'Clearance': <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" /></svg>,
+    'Requests': <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>,
+    'Doctors': <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" /></svg>,
+    'Chat': <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" /></svg>,
+    'Payouts': <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" /></svg>,
   };
   return icons[name] || icons['Dashboard'];
 };
 
 const Layout: React.FC<LayoutProps> = ({
-  user, children, onLogout, currentModule, onModuleChange, appointments = [], notifications = []
+  user, children, onLogout, currentModule, onModuleChange, appointments = [], notifications = [], isDrawerMode = false, onToggleDrawerMode
 }) => {
-  const [isCollapsed, setIsCollapsed] = useState(false);
+  const [isSidebarOpen, setIsSidebarOpen] = useState(!isDrawerMode);
 
-  const doctorNav = ['Overview', 'Appointment', 'Patients', 'Directory', 'Analytics', 'Payments', 'Clearance', 'Notifications', 'Settings'];
-  const patientNav = ['Dashboard', 'Visits', 'Facilities', 'Clinical Vault', 'Pharmacy', 'Analytics', 'Payments', 'Notifications', 'Profile'];
+  const doctorNav = ['Overview', 'Appointments', 'Requests', 'Patients', 'Chat', 'Payouts', 'Settings'];
+  const patientNav = ['Dashboard', 'Doctors', 'Chat', 'Visits', 'Facilities', 'Clinical Vault', 'Pharmacy', 'Analytics', 'Payments', 'Notifications', 'Profile'];
 
   const normalizedRole = (user?.role ?? '').toUpperCase();
   const navItems = normalizedRole === UserRole.PATIENT ? patientNav : doctorNav;
@@ -57,16 +63,32 @@ const Layout: React.FC<LayoutProps> = ({
   const unreadNotifCount = React.useMemo(() => notifications.filter(n => !n.isRead).length, [notifications]);
 
   return (
-    <div className="flex h-screen overflow-hidden bg-[#f4f7fe]">
+    <div className="flex h-screen overflow-hidden bg-gradient-to-br from-[#2E4A7D] to-[#1F3560] relative">
       {/* Sidebar - Landmark: navigation */}
+      {/* Mobile / Drawer Overlay */}
+      {isDrawerMode && isSidebarOpen && (
+        <div
+          className="fixed inset-0 bg-black/50 backdrop-blur-sm z-40 transition-opacity"
+          onClick={() => setIsSidebarOpen(false)}
+        />
+      )}
+
       <aside
-        className={`${isCollapsed ? 'w-0' : 'w-20 lg:w-64'} bg-white border-r border-[#eff2f6] flex flex-col items-center lg:items-start p-4 lg:p-6 transition-all z-20 overflow-hidden relative`}
+        className={`
+          ${isDrawerMode ? 'fixed inset-y-0 left-0 z-50 transform transition-transform duration-300 ease-in-out' : 'relative z-20 transition-all duration-300'}
+          ${isDrawerMode ? (isSidebarOpen ? 'translate-x-0 w-64' : '-translate-x-full w-64') : (isSidebarOpen ? 'w-64' : 'w-20')}
+          bg-[#2c4373] border-r border-white/5 flex flex-col ${isSidebarOpen ? 'items-start p-6' : 'items-center p-4'} shadow-[0_10px_30px_rgba(0,0,0,0.15)] overflow-hidden
+        `}
         role="complementary"
         aria-label="Main Sidebar"
       >
-        <div className="mb-8" />
+        <div className={`mb-8 w-full flex ${isSidebarOpen ? 'justify-start pl-2' : 'justify-center'} min-h-[40px]`}>
+          {isSidebarOpen && (
+            <img src="/cayr-logo.png" alt="Cayr Logo" className="h-10 w-auto object-contain brightness-0 invert opacity-90 transition-opacity duration-300" />
+          )}
+        </div>
 
-        {!isCollapsed && (
+        {(isDrawerMode || isSidebarOpen) && (
           <>
             <nav className="flex-1 w-full space-y-2" aria-label="Main Navigation">
               {navItems.map((item) => {
@@ -74,18 +96,21 @@ const Layout: React.FC<LayoutProps> = ({
                 return (
                   <button
                     key={item}
-                    onClick={() => onModuleChange(item)}
+                    onClick={() => {
+                      onModuleChange(item);
+                      if (isDrawerMode) setIsSidebarOpen(false);
+                    }}
                     aria-current={isActive ? 'page' : undefined}
-                    className={`w-full sidebar-item p-3.5 lg:px-4 lg:py-3.5 rounded-2xl flex items-center justify-center lg:justify-start space-x-4 transition-all relative outline-none focus:ring-2 focus:ring-blue-500/40 ${isActive
-                      ? 'active bg-[#3b5bfd] text-white shadow-xl shadow-blue-500/20'
-                      : 'text-[#94a3b8] hover:bg-[#f8fafc] hover:text-[#3b5bfd]'
+                    className={`w-full sidebar-item p-3.5 rounded-2xl flex items-center ${isSidebarOpen ? 'justify-start px-4 py-3.5 space-x-4' : 'justify-center'} transition-all relative outline-none focus:ring-2 focus:ring-blue-500/40 ${isActive
+                      ? 'active bg-gradient-to-r from-blue-500 to-indigo-600 text-white shadow-lg shadow-blue-500/30 font-bold'
+                      : 'text-blue-100/60 hover:bg-white/10 hover:text-white font-medium'
                       }`}
                   >
                     <SidebarIcon name={item} />
-                    <span className="hidden lg:block font-black text-xs uppercase tracking-widest">{item}</span>
+                    {isSidebarOpen && <span className="font-black text-xs uppercase tracking-widest">{item}</span>}
                     {item === 'Appointment' && pendingCount > 0 && (
                       <span
-                        className="absolute top-2 right-2 lg:relative lg:top-0 lg:right-0 lg:ml-auto w-5 h-5 bg-rose-500 text-white text-[10px] font-black rounded-full flex items-center justify-center animate-bounce shadow-md"
+                        className={`${isSidebarOpen ? 'relative ml-auto' : 'absolute top-2 right-2'} w-5 h-5 bg-rose-500 text-white text-[10px] font-black rounded-full flex items-center justify-center animate-bounce shadow-md`}
                         aria-label={`${pendingCount} pending appointments`}
                       >
                         {pendingCount}
@@ -93,7 +118,7 @@ const Layout: React.FC<LayoutProps> = ({
                     )}
                     {item === 'Notifications' && unreadNotifCount > 0 && (
                       <span
-                        className="absolute top-2 right-2 lg:relative lg:top-0 lg:right-0 lg:ml-auto w-5 h-5 bg-rose-500 text-white text-[10px] font-black rounded-full flex items-center justify-center shadow-md"
+                        className={`${isSidebarOpen ? 'relative ml-auto' : 'absolute top-2 right-2'} w-5 h-5 bg-rose-500 text-white text-[10px] font-black rounded-full flex items-center justify-center shadow-md`}
                         aria-label={`${unreadNotifCount} unread notifications`}
                       >
                         {unreadNotifCount > 9 ? '9+' : unreadNotifCount}
@@ -106,11 +131,11 @@ const Layout: React.FC<LayoutProps> = ({
 
             <button
               onClick={onLogout}
-              className="mt-auto w-full p-4 lg:px-4 lg:py-4 rounded-2xl flex items-center justify-center lg:justify-start space-x-4 text-[#94a3b8] hover:text-rose-500 hover:bg-rose-50 transition-all font-black uppercase tracking-widest text-[10px] outline-none focus:ring-2 focus:ring-rose-500/20"
+              className={`mt-auto w-full p-4 rounded-2xl flex items-center ${isSidebarOpen ? 'justify-start space-x-4' : 'justify-center'} text-blue-100/60 hover:text-rose-400 hover:bg-white/5 transition-all font-black uppercase tracking-widest text-[10px] outline-none focus:ring-2 focus:ring-rose-500/20`}
               aria-label="Logout Session"
             >
               <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3 3V7a3 3 0 013-3h4a3 3 0 013 3v1" /></svg>
-              <span className="hidden lg:block">Logout Session</span>
+              {isSidebarOpen && <span>Logout Session</span>}
             </button>
           </>
         )}
@@ -118,28 +143,32 @@ const Layout: React.FC<LayoutProps> = ({
 
       {/* Main Container - Landmark: banner and main */}
       <div className="flex-1 flex flex-col min-w-0">
-        <header className="h-20 bg-white/80 backdrop-blur-md border-b border-[#eff2f6]/50 flex items-center justify-between px-10 z-10" role="banner">
+        <header className="h-24 bg-transparent border-b border-white/5 flex items-center justify-between px-10 z-10" role="banner">
           <div className="flex items-center space-x-6">
             <button
-              onClick={() => setIsCollapsed(!isCollapsed)}
-              className="p-2 hover:bg-slate-100 rounded-xl transition-colors text-slate-600 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
-              aria-label={isCollapsed ? "Show Sidebar" : "Hide Sidebar"}
+              onClick={() => setIsSidebarOpen(!isSidebarOpen)}
+              className="p-2.5 bg-white/5 hover:bg-white/10 rounded-2xl transition-all text-white focus:outline-none focus:ring-2 focus:ring-white/20 shadow-lg active:scale-95"
+              aria-label={isSidebarOpen ? "Close Menu" : "Open Menu"}
             >
-              <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M4 6h16M4 12h16M4 18h16" /></svg>
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M4 6h16M4 12h16M4 18h16" /></svg>
             </button>
-
-            <div
-              className="flex items-center space-x-2 group cursor-pointer focus:outline-none"
-              onClick={() => onModuleChange(isDoctor ? 'Overview' : 'Dashboard')}
-              role="button"
-              tabIndex={0}
-            >
-              <img src="/cayr-logo.png" alt="Cayr Logo" className="h-7 w-auto object-contain group-hover:scale-105 transition-transform" />
-            </div>
+            {(!isSidebarOpen || isDrawerMode) && (
+              <img src="/cayr-logo.png" alt="Cayr Logo" className="h-8 w-auto object-contain brightness-0 invert opacity-90 animate-in fade-in zoom-in-95 duration-300" />
+            )}
+            {!isDrawerMode && (
+              <div className="relative hidden md:block">
+                <span className="absolute inset-y-0 left-0 flex items-center pl-4 text-slate-400">🔍</span>
+                <input
+                  type="text"
+                  placeholder="Search..."
+                  className="pl-12 pr-6 py-3 bg-white/95 backdrop-blur-md rounded-[20px] text-[13px] font-medium text-slate-700 outline-none focus:ring-4 focus:ring-white/20 w-64 lg:w-96 shadow-[0_10px_30px_rgba(0,0,0,0.15)] transition-all placeholder:text-slate-400"
+                />
+              </div>
+            )}
           </div>
 
           <div className="flex items-center space-x-8">
-            <div className="flex items-center space-x-6">
+            <div className="flex items-center space-x-6 text-white">
               <NotificationBell
                 notifications={notifications}
                 onClick={() => onModuleChange('Notifications')}
@@ -147,28 +176,36 @@ const Layout: React.FC<LayoutProps> = ({
             </div>
 
             <div
-              className="flex items-center space-x-4 pl-8 border-l border-[#eff2f6] cursor-pointer group focus:outline-none focus:ring-2 focus:ring-blue-500 rounded-xl"
+              className="flex items-center space-x-4 px-6 py-2 bg-white/95 backdrop-blur-md rounded-[20px] cursor-pointer group focus:outline-none focus:ring-4 focus:ring-white/20 shadow-[0_10px_30px_rgba(0,0,0,0.15)] transition-all hover:bg-white"
               onClick={() => onModuleChange('Profile')}
               role="button"
               tabIndex={0}
-              onKeyDown={(e) => (e.key === 'Enter' || e.key === ' ') && onModuleChange('Profile')}
               aria-label="View User Profile Settings"
             >
-              <div className="w-10 h-10 rounded-full overflow-hidden border-2 border-[#f8fafc] shadow-sm group-hover:scale-105 transition-transform">
-                <img src={`https://api.dicebear.com/7.x/avataaars/svg?seed=${user?.name}`} alt="User Profile Avatar" />
+              <div className="w-10 h-10 rounded-[14px] overflow-hidden border border-slate-100 shadow-sm group-hover:scale-105 transition-transform shrink-0">
+                <img src={`https://api.dicebear.com/7.x/avataaars/svg?seed=${user?.name}`} alt="User Profile Avatar" className="w-full h-full object-cover" />
               </div>
-              <div className="hidden lg:block text-left">
-                <p className="text-xs font-black text-[#1a1d1f] leading-none uppercase tracking-widest">{user?.name}</p>
-                <p className="text-[9px] font-black text-[#3b5bfd] mt-1.5 uppercase tracking-widest opacity-80">
-                  {isDoctor ? `Verified Doctor${user?.specialty ? ' • ' + user.specialty : ''}` : isAdmin ? 'Administrator' : 'Verified Patient'}
+              <div className="text-left pr-2 truncate max-w-[120px] xs:max-w-none">
+                <p className="text-[14px] font-bold text-slate-900 leading-none truncate">{user?.name}</p>
+                <p className="text-[11px] font-medium text-slate-500 mt-1 truncate">
+                  {isDoctor ? `Verified Doctor` : isAdmin ? 'Administrator' : 'Verified Patient'}
                 </p>
               </div>
-              <svg className="w-4 h-4 text-[#94a3b8] hidden lg:block" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7" /></svg>
+              <svg className="w-4 h-4 text-slate-400 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M19 9l-7 7-7-7" /></svg>
             </div>
+            {onToggleDrawerMode && (
+              <button
+                onClick={onToggleDrawerMode}
+                className="hidden lg:flex items-center justify-center p-2 bg-white/5 hover:bg-white/10 rounded-2xl text-white transition-all shadow-[0_10px_30px_rgba(0,0,0,0.15)]"
+                title={isDrawerMode ? "Switch to Sidebar Mode" : "Switch to Drawer Mode"}
+              >
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d={isDrawerMode ? "M9 17V7m0 10a2 2 0 01-2 2H5a2 2 0 01-2-2V7a2 2 0 012-2h2a2 2 0 012 2m0 10a2 2 0 002 2h2a2 2 0 002-2M9 7a2 2 0 012-2h2a2 2 0 012 2m0 10V7m0 10a2 2 0 002 2h2a2 2 0 002-2V7a2 2 0 00-2-2h-2a2 2 0 00-2 2" : "M4 6h16M4 12h16m-7 6h7"} /></svg>
+              </button>
+            )}
           </div>
         </header>
 
-        <main className="flex-1 overflow-y-auto p-10 relative bg-[#f4f7fe]" id="main-content" role="main">
+        <main className="flex-1 overflow-y-auto p-10 relative bg-transparent" id="main-content" role="main">
           {children}
           {/* Global AI Assistant */}
           <AIAssistant />

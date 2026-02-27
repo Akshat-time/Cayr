@@ -2,9 +2,18 @@
 import { User, UserRole, Appointment, AppointmentStatus } from './types';
 
 export const MOCK_DOCTORS: User[] = [
-  { id: 'd1', name: 'Dr. Sarah Wilson', email: 'sarah.w@med.com', role: UserRole.DOCTOR, specialty: 'Cardiology' },
-  { id: 'd2', name: 'Dr. James Chen', email: 'james.c@med.com', role: UserRole.DOCTOR, specialty: 'Pediatrics' },
-  { id: 'd3', name: 'Dr. Emily Blunt', email: 'emily.b@med.com', role: UserRole.DOCTOR, specialty: 'Neurology' },
+  {
+    id: 'd1', name: 'Dr. Sarah Wilson', email: 'sarah.w@med.com', role: UserRole.DOCTOR, specialty: 'Cardiology',
+    addressDetails: { zip: '110001', city: 'New Delhi', state: 'Delhi' }
+  },
+  {
+    id: 'd2', name: 'Dr. James Chen', email: 'james.c@med.com', role: UserRole.DOCTOR, specialty: 'Pediatrics',
+    addressDetails: { zip: '400001', city: 'Mumbai', state: 'Maharashtra' }
+  },
+  {
+    id: 'd3', name: 'Dr. Emily Blunt', email: 'emily.b@med.com', role: UserRole.DOCTOR, specialty: 'Neurology',
+    addressDetails: { zip: '110001', city: 'New Delhi', state: 'Delhi' }
+  },
 ];
 
 export const INITIAL_APPOINTMENTS: Appointment[] = [

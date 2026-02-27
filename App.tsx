@@ -244,6 +244,7 @@ const AppContent: React.FC = () => {
   const [selectedDetailedPatient, setSelectedDetailedPatient] = useState<PatientRecord | null>(null);
   const [isModalLoading, setIsModalLoading] = useState(false);
   const [currentModule, setCurrentModule] = useState('Overview');
+  const [isDrawerMode, setIsDrawerMode] = useState(false);
   const location = useLocation();
 
   const handleModuleChange = (module: string) => {
@@ -430,6 +431,8 @@ const AppContent: React.FC = () => {
       notifications={notifications}
       currentModule={currentModule}
       onModuleChange={handleModuleChange}
+      isDrawerMode={isDrawerMode}
+      onToggleDrawerMode={() => setIsDrawerMode(!isDrawerMode)}
     >
       <Routes>
         {/* Smart root redirect */}

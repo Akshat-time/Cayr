@@ -323,10 +323,11 @@ const ClinicLabFinder: React.FC = () => {
 
     if (error) {
         return (
-            <div className="h-[600px] bg-white rounded-[40px] flex flex-col items-center justify-center p-10 text-center border border-slate-100 shadow-sm animate-in fade-in duration-500">
-                <div className="text-6xl mb-6">📍</div>
-                <h3 className="text-xl font-black text-slate-800 mb-2">Location Access Required</h3>
-                <p className="text-slate-500 text-sm max-w-md">{error}</p>
+            <div className="h-[600px] bg-white rounded-[20px] flex flex-col items-center justify-center p-10 text-center border border-white/5 shadow-[0_10px_30px_rgba(0,0,0,0.15)] animate-in fade-in duration-500">
+                <div className="w-20 h-20 bg-slate-50 rounded-[14px] flex items-center justify-center text-4xl mb-6 shadow-sm">📍</div>
+                <h3 className="text-[20px] font-bold text-slate-900 mb-2">Location Required</h3>
+                <p className="text-[14px] font-medium text-slate-500 max-w-md">{error}</p>
+                <button onClick={() => window.location.reload()} className="mt-8 px-8 py-3 bg-slate-900 text-white rounded-[14px] font-bold text-[14px]">Retry Access</button>
             </div>
         );
     }
@@ -334,12 +335,12 @@ const ClinicLabFinder: React.FC = () => {
     return (
         <div className="space-y-10 animate-in fade-in duration-500">
             <div className="flex flex-col md:flex-row justify-between items-center gap-6">
-                <div className="w-full md:w-auto">
-                    <h2 className="text-3xl font-black tracking-tight flex items-center text-slate-900">
-                        Clinic & Labs Finder
-                        {loading && <div className="ml-4 w-2 h-2 bg-blue-500 rounded-full animate-ping"></div>}
-                    </h2>
-                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mt-2">{isGpsActive ? 'Real-time OpenStreetMap Network' : 'Manual Location Explorer'}</p>
+                <div>
+                    <h1 className="text-[28px] font-semibold text-white tracking-tight flex items-center">
+                        Facility Locator
+                        {loading && <div className="ml-4 w-3 h-3 bg-blue-400 rounded-full animate-ping"></div>}
+                    </h1>
+                    <p className="text-[14px] font-medium text-blue-100/60 mt-1">{isGpsActive ? 'Live OpenStreetMap Network' : 'Manual Location Explorer'}</p>
                 </div>
 
                 <div className="flex flex-col sm:flex-row w-full md:w-auto gap-4 items-center">
@@ -348,24 +349,24 @@ const ClinicLabFinder: React.FC = () => {
                             type="text"
                             value={searchInput}
                             onChange={(e) => setSearchInput(e.target.value)}
-                            placeholder="Search Area or Pincode..."
-                            className="w-full pl-6 pr-12 py-3.5 bg-white border border-slate-100 rounded-2xl text-[10px] font-black uppercase tracking-widest outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-500/5 transition-all shadow-sm group-hover:shadow-md"
+                            placeholder="Area / Pincode..."
+                            className="w-full pl-6 pr-12 py-3.5 bg-white border border-white/5 rounded-[14px] text-[14px] font-medium placeholder:text-slate-400 outline-none focus:ring-4 focus:ring-blue-500/10 transition-all shadow-[0_4px_20px_rgba(0,0,0,0.05)]"
                         />
                         <button
                             type="submit"
                             disabled={isSearchingLocation}
-                            className="absolute right-2 top-1.5 bottom-1.5 w-10 bg-slate-50 text-slate-400 hover:bg-blue-600 hover:text-white rounded-xl flex items-center justify-center transition-all disabled:opacity-50"
+                            className="absolute right-2 top-2 bottom-2 w-10 bg-slate-50 text-slate-400 hover:bg-blue-600 hover:text-white rounded-[10px] flex items-center justify-center transition-all disabled:opacity-50"
                         >
                             {isSearchingLocation ? <div className="w-3 h-3 border-2 border-current border-t-transparent rounded-full animate-spin"></div> : '🔍'}
                         </button>
                     </form>
 
-                    <div className="flex bg-white p-1.5 rounded-2xl border border-slate-100 shadow-sm overflow-x-auto scrollbar-hide">
+                    <div className="flex bg-white/10 backdrop-blur-md p-1 rounded-[14px] border border-white/10 shadow-lg overflow-x-auto scrollbar-hide">
                         {categories.map(cat => (
                             <button
                                 key={cat.id}
                                 onClick={() => setActiveCategory(cat.id)}
-                                className={`px-6 py-3 rounded-xl text-[9px] font-black uppercase tracking-widest transition-all gap-2 flex items-center ${activeCategory === cat.id ? 'bg-[#3b5bfd] text-white shadow-lg shadow-blue-500/20' : 'text-slate-400 hover:bg-slate-50 hover:text-slate-800'}`}
+                                className={`px-5 py-2.5 rounded-[10px] text-[13px] font-bold tracking-wide transition-all gap-2 flex items-center ${activeCategory === cat.id ? 'bg-[#3b5bfd] text-white shadow-lg shadow-blue-500/30' : 'text-white/60 hover:text-white hover:bg-white/5'}`}
                             >
                                 <span>{cat.icon}</span>
                                 {cat.id}
@@ -375,88 +376,82 @@ const ClinicLabFinder: React.FC = () => {
                 </div>
             </div>
 
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-10">
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 h-[650px]">
                 {/* Map Container */}
-                <div className="lg:col-span-2 bg-white rounded-[48px] border border-slate-100 shadow-sm overflow-hidden h-[600px] relative group">
+                <div className="lg:col-span-2 bg-white rounded-[20px] shadow-[0_10px_30px_rgba(0,0,0,0.15)] border border-white/5 overflow-hidden relative group h-full">
                     <div ref={mapRef} className="w-full h-full z-0" />
 
                     {loading && facilities.length === 0 && (
-                        <div className="absolute inset-0 bg-white/80 backdrop-blur-sm flex flex-col items-center justify-center space-y-4 z-20">
-                            <div className="w-16 h-16 border-4 border-[#3b5bfd] border-t-transparent rounded-full animate-spin"></div>
-                            <p className="text-[10px] font-black uppercase tracking-[0.3em] text-slate-400">Querying OpenStreetMap...</p>
+                        <div className="absolute inset-0 bg-white/80 backdrop-blur-md flex flex-col items-center justify-center space-y-4 z-20">
+                            <div className="w-12 h-12 border-4 border-[#3b5bfd] border-t-transparent rounded-full animate-spin"></div>
+                            <p className="text-[13px] font-bold text-slate-400 tracking-wider">Querying Network...</p>
                         </div>
                     )}
 
                     {/* Map Overlay Controls */}
-                    <div className="absolute top-8 left-8 p-4 bg-white/90 backdrop-blur-md rounded-2xl border border-slate-100 shadow-lg z-10">
-                        <p className="text-[8px] font-black uppercase tracking-widest text-slate-400">Location Status</p>
-                        <div className="flex items-center justify-between gap-4 mt-1">
-                            {isGpsActive ? (
-                                <p className="text-[10px] font-black uppercase text-green-500 flex items-center gap-2">
-                                    <span className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></span>
-                                    GPS Locked
-                                </p>
-                            ) : (
-                                <p className="text-[10px] font-black uppercase text-amber-500 flex items-center gap-2">
-                                    <span className="w-2 h-2 bg-amber-500 rounded-full animate-pulse"></span>
-                                    Manual Search
-                                </p>
-                            )}
+                    <div className="absolute top-6 left-6 p-4 bg-white/90 backdrop-blur-md rounded-[16px] border border-white/10 shadow-xl z-10 flex items-center space-x-6">
+                        <div>
+                            <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400">Status</p>
+                            <div className="flex items-center gap-2 mt-1">
+                                <span className={`w-2 h-2 rounded-full animate-pulse ${isGpsActive ? 'bg-green-500' : 'bg-amber-500'}`}></span>
+                                <span className="text-[12px] font-bold text-slate-800">{isGpsActive ? 'GPS Locked' : 'Search View'}</span>
+                            </div>
+                        </div>
+                        {!isGpsActive && (
                             <button
                                 onClick={resetToGps}
-                                disabled={isGpsActive || isSearchingLocation}
-                                className={`text-[8px] font-black uppercase tracking-widest px-2 py-1 rounded-md transition-all ${isGpsActive ? 'text-slate-300 pointer-events-none' : 'text-blue-600 bg-blue-50 hover:bg-blue-600 hover:text-white'}`}
+                                disabled={isSearchingLocation}
+                                className="px-4 py-2 bg-blue-50 text-blue-600 rounded-[10px] text-[11px] font-bold hover:bg-blue-600 hover:text-white transition-all"
                             >
                                 Reset to GPS
                             </button>
-                        </div>
+                        )}
                     </div>
 
-                    <div className="absolute bottom-6 right-6 flex flex-col space-y-2 align-end">
-                        <div className="bg-white/90 backdrop-blur-md p-4 rounded-3xl shadow-xl border border-slate-100 w-48 z-10">
+                    <div className="absolute bottom-6 right-6">
+                        <div className="bg-white/90 backdrop-blur-md p-4 rounded-[16px] shadow-xl border border-white/10 w-48">
                             <div className="flex justify-between items-center mb-2">
-                                <span className="text-[8px] font-black uppercase text-slate-400">Search Radius</span>
-                                <span className="text-[10px] font-black text-blue-600">{(radius / 1000).toFixed(1)} km</span>
+                                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Range</span>
+                                <span className="text-[13px] font-bold text-blue-600">{(radius / 1000).toFixed(1)} km</span>
                             </div>
                             <input
-                                type="range" min="1000" max="20000" step="500"
+                                type="range" min="1000" max="20000" step="1000"
                                 value={radius}
                                 onChange={(e) => setRadius(parseInt(e.target.value))}
-                                className="w-full h-1.5 bg-slate-100 rounded-lg appearance-none cursor-pointer accent-[#3b5bfd]"
+                                className="w-full h-1.5 bg-slate-100 rounded-full appearance-none cursor-pointer accent-[#3b5bfd]"
                             />
                         </div>
                     </div>
                 </div>
 
                 {/* Results Panel */}
-                <div className="bg-white rounded-[48px] border border-slate-100 shadow-sm overflow-hidden flex flex-col h-[600px]">
-                    <div className="p-8 border-b border-slate-50 bg-slate-50/50 flex items-center justify-between">
-                        <div>
-                            <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">Nearby {activeCategory}</span>
-                            <p className="text-[9px] font-bold text-slate-400 mt-1">Showing {facilities.length} verified locations</p>
-                        </div>
+                <div className="bg-white rounded-[20px] shadow-[0_10px_30px_rgba(0,0,0,0.15)] border border-white/5 overflow-hidden flex flex-col h-full">
+                    <div className="p-6 border-b border-slate-50 bg-slate-50/30">
+                        <h3 className="text-[16px] font-bold text-slate-900">Nearby Results</h3>
+                        <p className="text-[13px] font-medium text-slate-500 mt-1">{facilities.length} verified locations</p>
                     </div>
 
-                    <div className="flex-1 overflow-y-auto p-6 space-y-5 scrollbar-hide custom-scrollbar">
+                    <div className="flex-1 overflow-y-auto p-4 space-y-4 custom-scrollbar">
                         {loading && facilities.length === 0 ? (
                             Array.from({ length: 4 }).map((_, i) => (
-                                <div key={i} className="p-6 bg-slate-50/50 rounded-3xl border border-transparent animate-pulse space-y-4">
+                                <div key={i} className="p-5 bg-slate-50/50 rounded-[16px] border border-transparent animate-pulse space-y-4">
                                     <div className="h-4 bg-slate-200 rounded w-3/4"></div>
                                     <div className="h-3 bg-slate-100 rounded w-1/2"></div>
-                                    <div className="h-8 bg-slate-100 rounded-[12px] w-full"></div>
+                                    <div className="h-8 bg-slate-100 rounded-[10px] w-full"></div>
                                 </div>
                             ))
                         ) : facilities.length === 0 ? (
-                            <div className="h-full flex flex-col items-center justify-center text-center opacity-30 p-10">
-                                <div className="text-6xl mb-6">🏥</div>
-                                <p className="text-[10px] font-black uppercase tracking-widest leading-relaxed">No {activeCategory.toLowerCase()} found in this area. Try increasing search radius.</p>
+                            <div className="h-full flex flex-col items-center justify-center text-center opacity-30 p-8">
+                                <div className="text-6xl mb-4">🏥</div>
+                                <p className="text-[14px] font-bold text-slate-900">No Facilities Found</p>
+                                <p className="text-[12px] font-medium text-slate-500 mt-2">Try increasing search radius.</p>
                             </div>
                         ) : (
                             facilities.map((f) => (
-                                <article
+                                <div
                                     key={f.id}
                                     id={`facility-${f.id}`}
-                                    className={`p-6 border transition-all group cursor-pointer rounded-[32px] ${selectedFacility?.id === f.id ? 'border-[#3b5bfd] bg-blue-50/30 ring-4 ring-blue-500/5' : 'bg-white border-slate-100 hover:border-[#3b5bfd] hover:shadow-lg'}`}
+                                    className={`p-5 border transition-all cursor-pointer rounded-[20px] ${selectedFacility?.id === f.id ? 'border-[#3b5bfd] bg-blue-50/30' : 'bg-white border-slate-50 hover:border-slate-200 hover:shadow-md'}`}
                                     onClick={() => {
                                         setSelectedFacility(f);
                                         if (leafletMapRef.current) {
@@ -464,30 +459,24 @@ const ClinicLabFinder: React.FC = () => {
                                         }
                                     }}
                                 >
-                                    <div className="flex justify-between items-start mb-3">
-                                        <h4 className="font-black text-slate-800 text-sm leading-tight tracking-tight group-hover:text-[#3b5bfd] transition-colors">{f.name}</h4>
-                                    </div>
-
+                                    <h4 className="font-bold text-slate-900 text-[15px] leading-tight mb-2">{f.name}</h4>
                                     <div className="space-y-2 mb-4">
-                                        <p className="flex items-start text-[10px] text-slate-500 font-bold leading-tight">
-                                            <span className="mr-2 mt-0.5">📍</span> {f.address}
+                                        <p className="text-[13px] text-slate-500 font-medium leading-relaxed">
+                                            📍 {f.address}
                                         </p>
                                         <div className="flex items-center gap-3">
-                                            <span className="px-2 py-0.5 bg-slate-100 text-slate-500 rounded-md text-[8px] font-black uppercase tracking-widest">
+                                            <span className="px-2 py-0.5 bg-slate-100 text-slate-600 rounded-[6px] text-[10px] font-bold">
                                                 {f.distance?.toFixed(2)} km away
                                             </span>
                                         </div>
                                     </div>
-
-                                    <div className="pt-4 border-t border-slate-100 flex items-center justify-between">
-                                        <button
-                                            onClick={(e) => { e.stopPropagation(); handleGetDirections(f); }}
-                                            className="px-4 py-2.5 bg-[#3b5bfd] text-white rounded-xl text-[9px] font-black uppercase tracking-widest hover:bg-blue-700 transition shadow-lg shadow-blue-500/20 active:scale-95"
-                                        >
-                                            Get Directions ➜
-                                        </button>
-                                    </div>
-                                </article>
+                                    <button
+                                        onClick={(e) => { e.stopPropagation(); handleGetDirections(f); }}
+                                        className="w-full py-3 bg-slate-900 text-white rounded-[12px] text-[12px] font-bold hover:bg-black transition-all shadow-lg shadow-black/5 active:scale-95"
+                                    >
+                                        Get Directions
+                                    </button>
+                                </div>
                             ))
                         )}
                     </div>
