@@ -10,15 +10,18 @@
     rel="stylesheet">
   <style>
     html,
-    body,
+    body {
+      margin: 0;
+      padding: 0;
+      -webkit-font-smoothing: antialiased;
+      -moz-osx-font-smoothing: grayscale;
+    }
+
     #root {
       height: 100%;
       width: 100%;
       margin: 0;
       padding: 0;
-      overflow: hidden;
-      -webkit-font-smoothing: antialiased;
-      -moz-osx-font-smoothing: grayscale;
     }
 
     body {
@@ -28,7 +31,7 @@
     }
 
     .login-bg {
-      background: linear-gradient(to bottom, #aed9f4 0%, #ffffff 100%);
+      background: #aed9f4;
       background-attachment: fixed;
       position: relative;
       overflow: hidden;

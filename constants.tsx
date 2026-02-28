@@ -38,3 +38,39 @@ export const INITIAL_APPOINTMENTS: Appointment[] = [
     status: AppointmentStatus.PENDING,
   }
 ];
+
+// ── PDF Extraction Configuration ─────────────────────────────────────────────
+
+export const EXTRACTION_CONFIDENCE_THRESHOLD = 0.8; // Fields ≥ 80% auto-checked in preview
+
+export interface ValidationRange { min: number; max: number; unit: string; label: string; }
+export const MEDICAL_VALIDATION_RANGES: Record<string, ValidationRange> = {
+  heartRate: { min: 20, max: 200, unit: 'bpm', label: 'Heart rate' },
+  glucose: { min: 20, max: 800, unit: 'mg/dL', label: 'Blood glucose' },
+  hemoglobin: { min: 3, max: 25, unit: 'g/dL', label: 'Hemoglobin' },
+  height: { min: 50, max: 250, unit: 'cm', label: 'Height' },
+  weight: { min: 2, max: 300, unit: 'kg', label: 'Weight' },
+  bpSystolic: { min: 40, max: 250, unit: 'mmHg', label: 'Blood pressure (systolic)' },
+  bpDiastolic: { min: 20, max: 150, unit: 'mmHg', label: 'Blood pressure (diastolic)' },
+};
+
+// Maps extracted field keys → human-readable form field labels
+export const EXTRACTION_FIELD_LABELS: Record<string, string> = {
+  patientName: 'Patient Name',
+  age: 'Age',
+  gender: 'Gender',
+  doctorName: 'Doctor Name',
+  reportDate: 'Report Date',
+  bloodPressure: 'Blood Pressure',
+  heartRate: 'Heart Rate (bpm)',
+  glucose: 'Blood Glucose (mg/dL)',
+  hemoglobin: 'Hemoglobin (g/dL)',
+  height: 'Height (cm)',
+  weight: 'Weight (kg)',
+  bloodType: 'Blood Type',
+  allergies: 'Allergies',
+  conditions: 'Pre-existing Conditions',
+  medications: 'Current Medications',
+  medicalHistory: 'Medical History',
+  symptoms: 'Symptoms',
+};

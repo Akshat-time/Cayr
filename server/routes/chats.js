@@ -2,6 +2,7 @@ import express from 'express';
 import jwt from 'jsonwebtoken';
 import ChatSession from '../models/ChatSession.js';
 import Message from '../models/Message.js';
+import Appointment from '../models/Appointment.js';
 
 const router = express.Router();
 
@@ -20,9 +21,21 @@ const requireAuth = (req, res, next) => {
 router.get('/:appointmentId/messages', requireAuth, async (req, res) => {
     try {
         const { appointmentId } = req.params;
-        const session = await ChatSession.findOne({ appointmentId });
+        let session = await ChatSession.findOne({ appointmentId });
 
-        if (!session) return res.status(404).json({ error: 'Chat session not found' });
+        if (!session) {
+            const appointment = await Appointment.findById(appointmentId);
+            if (!appointment) return res.status(404).json({ error: 'Appointment not found' });
+            if (appointment.status !== 'confirmed' && appointment.status !== 'completed') {
+                return res.status(403).json({ error: 'Appointment not active' });
+            }
+            session = await ChatSession.create({
+                appointmentId,
+                patientId: appointment.patientId,
+                doctorId: appointment.doctorId,
+                isActive: true
+            });
+        }
 
         // Ownership check
         if (session.patientId.toString() !== req.user.id && session.doctorId.toString() !== req.user.id) {
@@ -55,8 +68,25 @@ router.post('/:appointmentId/messages', requireAuth, async (req, res) => {
         const { appointmentId } = req.params;
         const { text, type = 'text' } = req.body;
 
-        const session = await ChatSession.findOne({ appointmentId });
-        if (!session) return res.status(404).json({ error: 'Chat session not found' });
+        try {
+            import('fs').then(fs => fs.appendFileSync('chat.log', `[POST] Received chat for ${appointmentId} text=${text}\n`));
+        } catch (e) { }
+
+        let session = await ChatSession.findOne({ appointmentId });
+
+        if (!session) {
+            const appointment = await Appointment.findById(appointmentId);
+            if (!appointment) return res.status(404).json({ error: 'Appointment not found' });
+            if (appointment.status !== 'confirmed' && appointment.status !== 'completed') {
+                return res.status(403).json({ error: 'Appointment not active' });
+            }
+            session = await ChatSession.create({
+                appointmentId,
+                patientId: appointment.patientId,
+                doctorId: appointment.doctorId,
+                isActive: true
+            });
+        }
 
         // Expiry/Active check
         if (!session.isActive) return res.status(403).json({ error: 'Chat session is not active' });
@@ -73,6 +103,9 @@ router.post('/:appointmentId/messages', requireAuth, async (req, res) => {
 
         res.json({ success: true, message });
     } catch (err) {
+        try {
+            import('fs').then(fs => fs.appendFileSync('chat.log', `[POST ERROR] ${err.message}\n`));
+        } catch (e) { }
         console.error('Post message error:', err);
         res.status(500).json({ error: 'Failed to send message' });
     }

@@ -40,7 +40,7 @@ const AIAssistant: React.FC = () => {
 
     try {
       const result = await chatSessionRef.current.sendMessageStream({ message: userText });
-      
+
       let aiText = '';
       setMessages(prev => [...prev, { role: 'ai', text: '' }]);
 
@@ -65,7 +65,7 @@ const AIAssistant: React.FC = () => {
 
   const renderContent = (text: string) => {
     const parts = text.split(/(```[\s\S]*?```)/g);
-    
+
     return parts.map((part, i) => {
       if (part.startsWith('```')) {
         const content = part.replace(/```/g, '').trim();
@@ -75,14 +75,14 @@ const AIAssistant: React.FC = () => {
           </pre>
         );
       }
-      
+
       return part.split('\n').map((line, j) => {
         if (line.trim() === '') return <div key={`${i}-${j}`} className="h-2" />;
-        
+
         const html = line
           .replace(/\*\*(.*?)\*\*/g, '<strong class="font-black text-slate-900">$1</strong>')
           .replace(/`(.*?)`/g, '<code class="bg-blue-50 text-[#3b5bfd] px-1.5 py-0.5 rounded-md font-mono text-[11px] border border-blue-100/50">$1</code>');
-        
+
         return (
           <p key={`${i}-${j}`} className="mb-2 last:mb-0 text-[13px]" dangerouslySetInnerHTML={{ __html: html }} />
         );
@@ -96,10 +96,12 @@ const AIAssistant: React.FC = () => {
         <div className="mb-4 w-[400px] h-[600px] bg-white border border-slate-100 shadow-[0_20px_60px_rgba(0,0,0,0.15)] rounded-[40px] flex flex-col overflow-hidden animate-in slide-in-from-bottom-8 fade-in duration-300">
           <div className="p-6 bg-[#1a1d1f] text-white flex items-center justify-between">
             <div className="flex items-center space-x-3">
-              <div className="w-10 h-10 bg-[#3b5bfd] rounded-2xl flex items-center justify-center text-xl shadow-lg shadow-blue-500/20">✨</div>
+              <div className="w-10 h-10 bg-[#1F4E79] rounded-2xl flex items-center justify-center text-white shadow-sm border border-[#2E6FA3]/30">
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M13 10V3L4 14h7v7l9-11h-7z" /></svg>
+              </div>
               <div>
-                <p className="font-black text-sm tracking-tight leading-none">Cayr Pro AI</p>
-                <p className="text-[9px] font-black uppercase text-blue-400 tracking-[0.2em] mt-1">Gemini 3 Pro Engine</p>
+                <p className="font-bold text-sm tracking-tight leading-none text-[#FFFFFF]">Clinical Assistant</p>
+                <p className="text-[9px] font-bold uppercase text-[#9FB3C8] tracking-[0.1em] mt-1">Secure Session</p>
               </div>
             </div>
             <button onClick={() => setIsOpen(false)} className="w-8 h-8 rounded-full bg-white/10 flex items-center justify-center hover:bg-white/20 transition-all">✕</button>
@@ -108,17 +110,17 @@ const AIAssistant: React.FC = () => {
           <div ref={scrollRef} className="flex-1 overflow-y-auto p-6 space-y-4 scrollbar-hide bg-[#f8fafc]/50">
             {messages.map((m, i) => (
               <div key={i} className={`flex ${m.role === 'user' ? 'justify-end' : 'justify-start'} animate-in slide-in-from-bottom-2`}>
-                <div className={`max-w-[85%] p-5 rounded-[28px] leading-relaxed font-medium shadow-sm ${m.role === 'user' ? 'bg-[#3b5bfd] text-white rounded-tr-none' : 'bg-white text-slate-700 border border-slate-100 rounded-tl-none'}`}>
+                <div className={`max-w-[85%] p-5 rounded-[20px] leading-relaxed font-medium shadow-sm border ${m.role === 'user' ? 'bg-[#1F4E79] text-[#FFFFFF] rounded-tr-none border-[#1F4E79]' : 'bg-[#FFFFFF] text-[#1C2B39] border-[#E3EAF2] rounded-tl-none'}`}>
                   {renderContent(m.text)}
                 </div>
               </div>
             ))}
             {isTyping && (
               <div className="flex justify-start">
-                <div className="bg-white border border-slate-100 px-5 py-4 rounded-[28px] rounded-tl-none shadow-sm flex items-center space-x-1.5 animate-in slide-in-from-bottom-1 fade-in duration-300">
-                  <div className="w-1.5 h-1.5 bg-[#3b5bfd] rounded-full animate-bounce [animation-duration:0.8s]"></div>
-                  <div className="w-1.5 h-1.5 bg-[#3b5bfd] rounded-full animate-bounce [animation-duration:0.8s] [animation-delay:0.2s]"></div>
-                  <div className="w-1.5 h-1.5 bg-[#3b5bfd] rounded-full animate-bounce [animation-duration:0.8s] [animation-delay:0.4s]"></div>
+                <div className="bg-[#FFFFFF] border border-[#E3EAF2] px-5 py-4 rounded-[20px] rounded-tl-none shadow-sm flex items-center space-x-1.5 animate-in slide-in-from-bottom-1 fade-in duration-300">
+                  <div className="w-1.5 h-1.5 bg-[#1F4E79] rounded-full animate-bounce [animation-duration:0.8s]"></div>
+                  <div className="w-1.5 h-1.5 bg-[#1F4E79] rounded-full animate-bounce [animation-duration:0.8s] [animation-delay:0.2s]"></div>
+                  <div className="w-1.5 h-1.5 bg-[#1F4E79] rounded-full animate-bounce [animation-duration:0.8s] [animation-delay:0.4s]"></div>
                 </div>
               </div>
             )}
@@ -126,19 +128,19 @@ const AIAssistant: React.FC = () => {
 
           <div className="p-6 bg-white border-t border-slate-50">
             <form onSubmit={handleSend} className="flex items-center space-x-3">
-              <input 
+              <input
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
                 placeholder="Ask me anything..."
                 className="flex-1 bg-slate-50 border border-slate-100 p-4 rounded-2xl text-[13px] font-medium outline-none focus:border-blue-500 transition-all focus:bg-white"
                 disabled={isTyping}
               />
-              <button 
+              <button
                 type="submit"
                 disabled={isTyping || !input.trim()}
-                className="w-12 h-12 bg-[#3b5bfd] text-white rounded-2xl flex items-center justify-center shadow-lg shadow-blue-500/20 hover:scale-105 active:scale-95 transition-all disabled:opacity-30"
+                className="w-12 h-12 bg-[#1F4E79] text-[#FFFFFF] rounded-2xl flex items-center justify-center shadow-sm hover:bg-[#163A5C] active:scale-95 transition-all disabled:opacity-30"
               >
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M12 19l9-7-9-7V7l11 5-11 5v-1z"/></svg>
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M12 19l9-7-9-7V7l11 5-11 5v-1z" /></svg>
               </button>
             </form>
             <p className="text-[8px] text-center text-slate-300 font-black uppercase tracking-widest mt-4">AI may display inaccurate information. Review clinical outputs.</p>
@@ -146,14 +148,17 @@ const AIAssistant: React.FC = () => {
         </div>
       )}
 
-      <button 
+      <button
         onClick={() => setIsOpen(!isOpen)}
-        className={`w-16 h-16 rounded-[24px] flex items-center justify-center text-2xl shadow-2xl transition-all hover:scale-110 active:scale-95 relative group ${isOpen ? 'bg-[#1a1d1f] text-white rotate-90' : 'bg-[#3b5bfd] text-white'}`}
+        className={`w-16 h-16 rounded-[24px] flex items-center justify-center text-white shadow-[0_8px_30px_rgba(15,42,67,0.15)] transition-all hover:scale-105 active:scale-95 border border-[#E3EAF2]/20 relative group ${isOpen ? 'bg-[#1C2B39] rotate-90' : 'bg-[#1F4E79]'}`}
         aria-label="Open AI Assistant"
       >
-        {isOpen ? '✕' : '✨'}
-        {!isOpen && <div className="absolute inset-0 bg-blue-400 rounded-[24px] animate-ping opacity-20 pointer-events-none"></div>}
-        <div className="absolute right-full mr-4 px-4 py-2 bg-[#1a1d1f] text-white text-[10px] font-black uppercase tracking-widest rounded-xl opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap">How can I help?</div>
+        {isOpen ? (
+          <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M6 18L18 6M6 6l12 12" /></svg>
+        ) : (
+          <svg className="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z" /></svg>
+        )}
+        <div className="absolute right-full mr-4 px-4 py-2 bg-[#1C2B39] text-[#FFFFFF] text-[10px] font-semibold uppercase tracking-wide rounded-lg opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap shadow-sm">AI Assistant</div>
       </button>
     </div>
   );

@@ -33,8 +33,8 @@ const Pharmacy: React.FC = () => {
             <div className="flex items-center gap-8 animate-in slide-in-from-left duration-700">
                 <img src="/pharmacy-removebg-preview.png" alt="Pharmacy" className="h-24 w-24 md:h-28 md:w-28 object-contain filter drop-shadow-2xl" />
                 <div>
-                    <h1 className="text-[32px] md:text-[40px] font-black text-white tracking-tight leading-none uppercase">Pharmacy</h1>
-                    <p className="text-[14px] font-medium text-blue-100/60 mt-2 uppercase tracking-widest">Direct clinical supply chain active</p>
+                    <h1 className="text-[32px] md:text-[40px] font-black text-[#1C2B39] tracking-tight leading-none uppercase">Pharmacy</h1>
+                    <p className="text-[14px] font-medium text-[#6B7C8F] mt-2 uppercase tracking-widest">Direct clinical supply chain active</p>
                 </div>
             </div>
             <div className="bg-white rounded-[20px] p-6 shadow-[0_10px_30px_rgba(0,0,0,0.15)] flex justify-between items-center border border-white/5">

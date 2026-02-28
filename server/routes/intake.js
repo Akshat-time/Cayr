@@ -4,6 +4,7 @@ import User from '../models/User.js';
 import IntakeRecord from '../models/IntakeRecord.js';
 import MedicalReport from '../models/MedicalReport.js';
 import { uploadMiddleware, handleMulterError } from '../middleware/uploadMiddleware.js';
+import { extractFromPDF } from '../services/pdfExtractService.js';
 
 const router = express.Router();
 
@@ -180,6 +181,33 @@ router.post(
     }
 );
 
+// ── POST /api/intake/extract-pdf ───────────────────────────────────────────
+// Called on upload from Step 1 — synchronous, returns preview structured data via Regex/Groq
+router.post(
+    '/extract-pdf',
+    requireAuth,
+    uploadMiddleware.single('file'), // Only process one explicitly uploaded file for extraction preview
+    handleMulterError,
+    async (req, res) => {
+        try {
+            if (!req.file || req.file.mimetype !== 'application/pdf') {
+                return res.status(400).json({ success: false, error: 'A valid PDF file is required' });
+            }
+
+            console.log(`[extract-pdf] Processing file: ${req.file.originalname}, size: ${req.file.size} bytes`);
+            const extractionResult = await extractFromPDF(req.file.buffer);
+            console.log(`[extract-pdf] Result: success=${extractionResult.success}, confidence=${extractionResult.confidence}`);
+            // extractFromPDF now returns { success, extracted, confidence, ... }
+            // If success is false, send it as 200 with success:false (not a crash)
+            return res.json(extractionResult);
+
+        } catch (err) {
+            console.error('POST /api/intake/extract-pdf FATAL error:', err.stack || err);
+            res.status(500).json({ success: false, error: `Extraction failed: ${err.message}` });
+        }
+    }
+);
+
 // ── POST /api/intake/skip ──────────────────────────────────────────────────────
 router.post('/skip', requireAuth, async (req, res) => {
     try {
@@ -199,16 +227,56 @@ router.post('/skip', requireAuth, async (req, res) => {
     }
 });
 
-// ── Async extraction placeholder (Phase 3 wires in Gemini) ────────────────────
+// ── Async extraction (called after submit, in background) ─────────────────────
 async function extractFilesAsync(fileIds) {
     for (const id of fileIds) {
         try {
             await MedicalReport.findByIdAndUpdate(id, { extractionStatus: 'processing' });
             const report = await MedicalReport.findById(id);
-            if (!report || !report.fileData) continue;
+            if (!report || !report.fileData) {
+                await MedicalReport.findByIdAndUpdate(id, { extractionStatus: 'failed' });
+                continue;
+            }
+
+            // Only attempt text extraction on PDFs
+            if (report.mimeType !== 'application/pdf') {
+                await MedicalReport.findByIdAndUpdate(id, { extractionStatus: 'done' });
+                continue;
+            }
+
+            const { text } = await extractTextFromBuffer(Buffer.from(report.fileData, 'base64'));
+            const { extractedFields, overallConfidence, validationWarnings } = await parseMedicalData(text);
+
+            // Build fieldConfidence map
+            const fieldConfidence = {};
+            for (const [key, entry] of Object.entries(extractedFields)) {
+                if (entry && typeof entry.confidence === 'number') fieldConfidence[key] = entry.confidence;
+            }
+
+            // Build extractedSummary
+            const get = (key) => extractedFields[key]?.value ?? null;
+            const summary = {
+                bloodPressure: get('bloodPressure') ? String(get('bloodPressure')) : undefined,
+                heartRate: get('heartRate') ? String(get('heartRate')) : undefined,
+                glucose: get('glucose') ? String(get('glucose')) : undefined,
+                hemoglobin: get('hemoglobin') ? String(get('hemoglobin')) : undefined,
+                height: get('height') ? String(get('height')) : undefined,
+                weight: get('weight') ? String(get('weight')) : undefined,
+                bloodType: get('bloodType') || undefined,
+                allergies: get('allergies') || [],
+                conditions: get('conditions') || [],
+                medications: get('medications') || [],
+                medicalHistory: get('medicalHistory') || undefined,
+                symptoms: get('symptoms') || undefined,
+                rawText: text.slice(0, 2000),
+            };
+
             await MedicalReport.findByIdAndUpdate(id, {
                 extractionStatus: 'done',
-                'extractedSummary.rawText': '(Extraction will be available in Phase 3)'
+                extractedRawText: text,
+                extractedSummary: summary,
+                fieldConfidence,
+                validationWarnings,
             });
         } catch (err) {
             console.error(`Extraction failed for report ${id}:`, err);

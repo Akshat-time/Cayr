@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { User } from '../types';
+import PatientReportHistory from './PatientReportHistory';
 
 interface PatientProfileProps {
   user: User;
@@ -602,9 +603,9 @@ const PatientProfile: React.FC<PatientProfileProps> = ({ user, onUpdateProfile }
                       <div key={f._id} className="flex items-center justify-between px-4 py-3 bg-slate-50 rounded-2xl border border-slate-100">
                         <span className="text-sm text-slate-700 font-medium truncate">{f.fileName || f.title}</span>
                         <span className={`shrink-0 text-[10px] font-black px-2 py-0.5 rounded-full uppercase tracking-widest ${f.extractionStatus === 'done' ? 'bg-green-50 text-green-600' :
-                            f.extractionStatus === 'processing' ? 'bg-blue-50 text-blue-600 animate-pulse' :
-                              f.extractionStatus === 'failed' ? 'bg-red-50 text-red-500' :
-                                'bg-slate-100 text-slate-400'
+                          f.extractionStatus === 'processing' ? 'bg-blue-50 text-blue-600 animate-pulse' :
+                            f.extractionStatus === 'failed' ? 'bg-red-50 text-red-500' :
+                              'bg-slate-100 text-slate-400'
                           }`}>
                           {f.extractionStatus === 'done' ? '✓ Ready' : f.extractionStatus === 'processing' ? '⚙ Processing' : f.extractionStatus === 'failed' ? '✗ Failed' : '⏳ Pending'}
                         </span>
@@ -625,6 +626,11 @@ const PatientProfile: React.FC<PatientProfileProps> = ({ user, onUpdateProfile }
             </div>
           )}
         </div>
+      </div>
+
+      {/* ── Medical Report History ────────────────────────────────────────── */}
+      <div className="mt-8">
+        <PatientReportHistory user={user} />
       </div>
     </div>
   );

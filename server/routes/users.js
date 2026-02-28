@@ -22,8 +22,28 @@ router.get('/', async (req, res) => {
     try {
         const { role } = req.query;
         const filter = role ? { role } : {};
-        const users = await User.find(filter).select('-password -profilePicture');
-        res.json(users);
+        const users = await User.find(filter).select('-password -profilePicture').lean();
+
+        // Populate doctor profiles if needed
+        const enrichedUsers = await Promise.all(users.map(async (user) => {
+            if (user.role === 'doctor') {
+                const docProfile = await DoctorProfile.findOne({ userId: user._id }).lean();
+                if (docProfile) {
+                    return {
+                        ...user,
+                        specialty: docProfile.specialization || '',
+                        licenseNumber: docProfile.licenseNumber || '',
+                        experienceYears: docProfile.experienceYears || 0,
+                        clinicName: docProfile.clinicName || '',
+                        consultationFee: docProfile.consultationFee || 0,
+                        bio: docProfile.bio || ''
+                    };
+                }
+            }
+            return user;
+        }));
+
+        res.json(enrichedUsers);
     } catch (err) {
         res.status(500).json({ error: err.message });
     }

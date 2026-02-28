@@ -7,10 +7,10 @@ export enum UserRole {
 }
 
 export enum AppointmentStatus {
-  PENDING = 'PENDING',
-  CONFIRMED = 'CONFIRMED',
-  COMPLETED = 'COMPLETED',
-  CANCELLED = 'CANCELLED'
+  PENDING = 'pending',
+  CONFIRMED = 'confirmed',
+  COMPLETED = 'completed',
+  CANCELLED = 'cancelled'
 }
 
 export enum PaymentStatus {

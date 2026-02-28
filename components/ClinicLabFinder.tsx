@@ -336,11 +336,11 @@ const ClinicLabFinder: React.FC = () => {
         <div className="space-y-10 animate-in fade-in duration-500">
             <div className="flex flex-col md:flex-row justify-between items-center gap-6">
                 <div>
-                    <h1 className="text-[28px] font-semibold text-white tracking-tight flex items-center">
+                    <h1 className="text-[28px] font-semibold text-[#1C2B39] tracking-tight flex items-center">
                         Facility Locator
-                        {loading && <div className="ml-4 w-3 h-3 bg-blue-400 rounded-full animate-ping"></div>}
+                        {loading && <div className="ml-4 w-3 h-3 bg-[#1F4E79] rounded-full animate-ping"></div>}
                     </h1>
-                    <p className="text-[14px] font-medium text-blue-100/60 mt-1">{isGpsActive ? 'Live OpenStreetMap Network' : 'Manual Location Explorer'}</p>
+                    <p className="text-[14px] font-medium text-[#6B7C8F] mt-1">{isGpsActive ? 'Live OpenStreetMap Network' : 'Manual Location Explorer'}</p>
                 </div>
 
                 <div className="flex flex-col sm:flex-row w-full md:w-auto gap-4 items-center">
@@ -361,12 +361,12 @@ const ClinicLabFinder: React.FC = () => {
                         </button>
                     </form>
 
-                    <div className="flex bg-white/10 backdrop-blur-md p-1 rounded-[14px] border border-white/10 shadow-lg overflow-x-auto scrollbar-hide">
+                    <div className="flex bg-[#FFFFFF] p-1.5 rounded-[12px] border border-[#E3EAF2] shadow-sm overflow-x-auto scrollbar-hide">
                         {categories.map(cat => (
                             <button
                                 key={cat.id}
                                 onClick={() => setActiveCategory(cat.id)}
-                                className={`px-5 py-2.5 rounded-[10px] text-[13px] font-bold tracking-wide transition-all gap-2 flex items-center ${activeCategory === cat.id ? 'bg-[#3b5bfd] text-white shadow-lg shadow-blue-500/30' : 'text-white/60 hover:text-white hover:bg-white/5'}`}
+                                className={`px-5 py-2.5 rounded-[8px] text-[14px] font-semibold transition-colors gap-2 flex items-center ${activeCategory === cat.id ? 'bg-[#1F4E79] text-[#FFFFFF] shadow-sm' : 'text-[#6B7C8F] hover:text-[#1C2B39] hover:bg-[#F4F7FB]'}`}
                             >
                                 <span>{cat.icon}</span>
                                 {cat.id}

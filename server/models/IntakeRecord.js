@@ -42,6 +42,16 @@ const IntakeRecordSchema = new mongoose.Schema({
     // Legacy timestamps kept for backward compatibility
     skippedAt: { type: Date, default: null },
     submittedAt: { type: Date, default: null },
+
+    // ── PDF Extraction tracking ──────────────────────────────────────────
+    // Tracks which report was used to populate this form
+    extractedReportId: { type: mongoose.Schema.Types.ObjectId, ref: 'MedicalReport', default: null },
+    // Fields that were auto-populated from extracted PDF data
+    autoFilledFields: [{ type: String }],
+    // Temporary preview object stored before user accepts/rejects (cleared on submit)
+    extractionPreview: { type: mongoose.Schema.Types.Mixed, default: null },
+    // Overall extraction quality score 0–1
+    extractionConfidence: { type: Number, default: 0 },
 }, { timestamps: true });
 
 // ── Helper: calculate progress percentage ───────────────────────────────────

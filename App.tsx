@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import LandingPage from './components/LandingPage';
 import { BrowserRouter, Routes, Route, Navigate, useNavigate, useLocation } from 'react-router-dom';
 import Layout from './components/Layout';
 import PatientDashboard from './components/PatientDashboard';
@@ -23,13 +24,13 @@ import {
 } from './types';
 import { MOCK_DOCTORS } from './constants';
 
-// ─── Auth Page (Landing + Role Select + Login/Register) ───────────────────────
-type AuthFlowStep = 'landing' | 'role_select' | 'auth' | 'patient_register' | 'doctor_register';
+// ─── Auth Page (Role Select + Login/Register) ────────────────────────────────
+type AuthFlowStep = 'role_select' | 'auth' | 'patient_register' | 'doctor_register';
 
 const AuthPage: React.FC = () => {
   const { login } = useAuth();
   const navigate = useNavigate();
-  const [flowStep, setFlowStep] = useState<AuthFlowStep>('landing');
+  const [flowStep, setFlowStep] = useState<AuthFlowStep>('role_select');
   const [loginMode, setLoginMode] = useState<UserRole>(UserRole.PATIENT);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -68,19 +69,7 @@ const AuthPage: React.FC = () => {
   return (
     <div className="min-h-screen login-bg flex flex-col items-center justify-center p-6">
 
-      {/* ── Landing ── */}
-      {flowStep === 'landing' && (
-        <div className="max-w-4xl w-full text-center space-y-12 animate-in fade-in zoom-in duration-700">
-          <div className="space-y-6">
-            <div className="w-24 h-24 bg-slate-900 rounded-[32px] mx-auto flex items-center justify-center text-white text-4xl font-black shadow-2xl">C</div>
-            <h1 className="text-7xl font-black text-slate-900 tracking-tighter leading-none">The Future of <span className="text-blue-600">Clinical Care</span>.</h1>
-            <p className="text-xl text-slate-500 font-medium max-w-xl mx-auto leading-relaxed">Unified healthcare management with AI triage, real-time multilingual interpreting, and high-fidelity telemedicine.</p>
-          </div>
-          <div className="flex flex-col sm:flex-row items-center justify-center gap-6">
-            <button onClick={() => setFlowStep('role_select')} className="w-full sm:w-72 py-6 bg-slate-900 text-white rounded-[32px] font-black text-xs uppercase tracking-[0.3em] shadow-2xl hover:bg-black transition-all">Enter Platform</button>
-          </div>
-        </div>
-      )}
+      {/* Role Select now starts directly */}
 
       {/* ── Role Select ── */}
       {flowStep === 'role_select' && (
@@ -101,7 +90,7 @@ const AuthPage: React.FC = () => {
               <p className="text-sm text-slate-500 mt-4 leading-relaxed font-medium">Manage practice and host clinics.</p>
             </button>
           </div>
-          <button onClick={() => setFlowStep('landing')} className="w-full text-center text-slate-400 font-black text-[10px] uppercase tracking-[0.3em] hover:text-blue-600 transition-colors mt-10">← Back</button>
+          <button onClick={() => navigate('/')} className="w-full text-center text-slate-400 font-black text-[10px] uppercase tracking-[0.3em] hover:text-blue-600 transition-colors mt-10">← Back to Home</button>
         </div>
       )}
 
@@ -292,7 +281,7 @@ const AppContent: React.FC = () => {
     fetchMedicalReports();
     const r = (user.role || '').toLowerCase();
     if (r === 'doctor' || r === 'admin') fetchPatients();
-    if (r === 'admin') fetchDoctors();
+    if (r === 'admin' || r === 'patient') fetchDoctors();
   }, [user]);
 
   const fetchAppointments = async () => {
@@ -340,15 +329,22 @@ const AppContent: React.FC = () => {
   };
 
   const handleBookAppointment = async (doctorId: string, doctorName: string, date: string, time: string) => {
-    if (!user) return;
+    if (!user) return false;
     try {
       const res = await fetch('/api/appointments', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ doctorId, doctorName, date, time }),
       });
-      if (res.ok) await fetchAppointments();
-    } catch (err) { console.error('Book appointment failed', err); }
+      if (res.ok) {
+        await fetchAppointments();
+        return true;
+      }
+      return false;
+    } catch (err) {
+      console.error('Book appointment failed', err);
+      return false;
+    }
   };
 
   const handleUpdateAppointmentStatus = async (id: string, status: AppointmentStatus) => {
@@ -397,11 +393,13 @@ const AppContent: React.FC = () => {
 
   if (isLoading) return <div className="min-h-screen flex items-center justify-center bg-[#f4f7fe]"><div className="w-12 h-12 border-4 border-[#3b5bfd] border-t-transparent rounded-full animate-spin" /></div>;
 
-  // If not logged in, render auth pages WITHOUT layout
+  // If not logged in, render Landing or Auth pages WITHOUT layout
   if (!user) {
     return (
       <Routes>
-        <Route path="*" element={<AuthPage />} />
+        <Route path="/" element={<LandingPage />} />
+        <Route path="/auth" element={<AuthPage />} />
+        <Route path="*" element={<LandingPage />} />
       </Routes>
     );
   }
@@ -453,12 +451,12 @@ const AppContent: React.FC = () => {
           <ProtectedRoute allowedRoles={[UserRole.PATIENT]}>
             <PatientDashboard
               user={user} appointments={appointments} medicalReports={medicalReports}
-              prescriptions={prescriptions} payments={payments}
+              prescriptions={prescriptions} payments={payments} doctors={doctors}
               onBook={handleBookAppointment} onAddReport={handleAddReport}
               onOpenChat={setActiveChatAppointmentId}
               onUploadPrescription={presc => setPrescriptions(prev => [presc, ...prev])}
               view={(() => {
-                const map: Record<string, 'dashboard' | 'analytics' | 'payments' | 'reports' | 'reminders' | 'facilities' | 'booking' | 'pharmacy'> = {
+                const map: Record<string, 'dashboard' | 'analytics' | 'payments' | 'reports' | 'reminders' | 'facilities' | 'booking' | 'pharmacy' | 'doctors' | 'chat'> = {
                   'Dashboard': 'dashboard',
                   'Analytics': 'analytics',
                   'Payments': 'payments',
@@ -466,6 +464,8 @@ const AppContent: React.FC = () => {
                   'Facilities': 'facilities',
                   'Clinical Vault': 'reports',
                   'Pharmacy': 'pharmacy',
+                  'Doctors': 'doctors',
+                  'Chat': 'chat',
                 };
                 return map[currentModule] ?? 'dashboard';
               })()}

@@ -19,7 +19,7 @@ interface LayoutProps {
 const SidebarIcon = ({ name }: { name: string }) => {
   const icons: Record<string, React.ReactElement> = {
     'Overview': <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z" /></svg>,
-    'Appointment': <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>,
+    'Appointments': <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>,
     'Patients': <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" /></svg>,
     'Payments': <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" /></svg>,
     'Analytics': <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" /></svg>,
@@ -63,7 +63,7 @@ const Layout: React.FC<LayoutProps> = ({
   const unreadNotifCount = React.useMemo(() => notifications.filter(n => !n.isRead).length, [notifications]);
 
   return (
-    <div className="flex h-screen overflow-hidden bg-gradient-to-br from-[#2E4A7D] to-[#1F3560] relative">
+    <div className="flex h-screen overflow-hidden bg-[#F4F7FB] relative">
       {/* Sidebar - Landmark: navigation */}
       {/* Mobile / Drawer Overlay */}
       {isDrawerMode && isSidebarOpen && (
@@ -77,12 +77,12 @@ const Layout: React.FC<LayoutProps> = ({
         className={`
           ${isDrawerMode ? 'fixed inset-y-0 left-0 z-50 transform transition-transform duration-300 ease-in-out' : 'relative z-20 transition-all duration-300'}
           ${isDrawerMode ? (isSidebarOpen ? 'translate-x-0 w-64' : '-translate-x-full w-64') : (isSidebarOpen ? 'w-64' : 'w-20')}
-          bg-[#2c4373] border-r border-white/5 flex flex-col ${isSidebarOpen ? 'items-start p-6' : 'items-center p-4'} shadow-[0_10px_30px_rgba(0,0,0,0.15)] overflow-hidden
+          bg-[#0F2A43] flex flex-col ${isSidebarOpen ? 'items-start p-6' : 'items-center p-4'} shadow-none overflow-hidden
         `}
         role="complementary"
         aria-label="Main Sidebar"
       >
-        <div className={`mb-8 w-full flex ${isSidebarOpen ? 'justify-start pl-2' : 'justify-center'} min-h-[40px]`}>
+        <div className={`mb-6 shrink-0 w-full flex ${isSidebarOpen ? 'justify-start pl-2' : 'justify-center'} min-h-[40px]`}>
           {isSidebarOpen && (
             <img src="/cayr-logo.png" alt="Cayr Logo" className="h-10 w-auto object-contain brightness-0 invert opacity-90 transition-opacity duration-300" />
           )}
@@ -90,7 +90,7 @@ const Layout: React.FC<LayoutProps> = ({
 
         {(isDrawerMode || isSidebarOpen) && (
           <>
-            <nav className="flex-1 w-full space-y-2" aria-label="Main Navigation">
+            <nav className="flex-1 w-full space-y-1 overflow-y-auto pb-2 scrollbar-hide" aria-label="Main Navigation" style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
               {navItems.map((item) => {
                 const isActive = currentModule === item || (currentModule === 'Dashboard' && item === 'Overview');
                 return (
@@ -101,14 +101,14 @@ const Layout: React.FC<LayoutProps> = ({
                       if (isDrawerMode) setIsSidebarOpen(false);
                     }}
                     aria-current={isActive ? 'page' : undefined}
-                    className={`w-full sidebar-item p-3.5 rounded-2xl flex items-center ${isSidebarOpen ? 'justify-start px-4 py-3.5 space-x-4' : 'justify-center'} transition-all relative outline-none focus:ring-2 focus:ring-blue-500/40 ${isActive
-                      ? 'active bg-gradient-to-r from-blue-500 to-indigo-600 text-white shadow-lg shadow-blue-500/30 font-bold'
-                      : 'text-blue-100/60 hover:bg-white/10 hover:text-white font-medium'
+                    className={`w-full sidebar-item p-3 flex items-center ${isSidebarOpen ? 'justify-start px-4 py-3 space-x-4' : 'justify-center'} transition-all relative outline-none ${isActive
+                      ? 'bg-[#1F4E79] text-[#FFFFFF] shadow-none font-medium border-l-[3px] border-[#2E6FA3] rounded-r-[6px] rounded-l-none'
+                      : 'text-[#9FB3C8] hover:bg-[#163A5C] hover:text-[#FFFFFF] font-medium rounded-md'
                       }`}
                   >
                     <SidebarIcon name={item} />
-                    {isSidebarOpen && <span className="font-black text-xs uppercase tracking-widest">{item}</span>}
-                    {item === 'Appointment' && pendingCount > 0 && (
+                    {isSidebarOpen && <span className="font-regular text-sm tracking-wide">{item}</span>}
+                    {item === 'Requests' && pendingCount > 0 && (
                       <span
                         className={`${isSidebarOpen ? 'relative ml-auto' : 'absolute top-2 right-2'} w-5 h-5 bg-rose-500 text-white text-[10px] font-black rounded-full flex items-center justify-center animate-bounce shadow-md`}
                         aria-label={`${pendingCount} pending appointments`}
@@ -131,7 +131,7 @@ const Layout: React.FC<LayoutProps> = ({
 
             <button
               onClick={onLogout}
-              className={`mt-auto w-full p-4 rounded-2xl flex items-center ${isSidebarOpen ? 'justify-start space-x-4' : 'justify-center'} text-blue-100/60 hover:text-rose-400 hover:bg-white/5 transition-all font-black uppercase tracking-widest text-[10px] outline-none focus:ring-2 focus:ring-rose-500/20`}
+              className={`mt-4 shrink-0 w-full p-3.5 rounded-md flex items-center ${isSidebarOpen ? 'justify-start space-x-4' : 'justify-center'} text-[#9FB3C8] hover:text-[#FFFFFF] hover:bg-[#163A5C] transition-all font-medium text-sm outline-none`}
               aria-label="Logout Session"
             >
               <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3 3V7a3 3 0 013-3h4a3 3 0 013 3v1" /></svg>
@@ -143,17 +143,17 @@ const Layout: React.FC<LayoutProps> = ({
 
       {/* Main Container - Landmark: banner and main */}
       <div className="flex-1 flex flex-col min-w-0">
-        <header className="h-24 bg-transparent border-b border-white/5 flex items-center justify-between px-10 z-10" role="banner">
+        <header className="h-[88px] bg-[#EAF1F8] border-b border-[#D6E0EB] flex items-center justify-between px-10 z-10" role="banner">
           <div className="flex items-center space-x-6">
             <button
               onClick={() => setIsSidebarOpen(!isSidebarOpen)}
-              className="p-2.5 bg-white/5 hover:bg-white/10 rounded-2xl transition-all text-white focus:outline-none focus:ring-2 focus:ring-white/20 shadow-lg active:scale-95"
+              className="p-2.5 bg-[#FFFFFF] border border-[#D6E0EB] hover:bg-[#F4F7FB] rounded-lg transition-all text-[#1C2B39] focus:outline-none shadow-sm active:scale-95"
               aria-label={isSidebarOpen ? "Close Menu" : "Open Menu"}
             >
               <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M4 6h16M4 12h16M4 18h16" /></svg>
             </button>
             {(!isSidebarOpen || isDrawerMode) && (
-              <img src="/cayr-logo.png" alt="Cayr Logo" className="h-8 w-auto object-contain brightness-0 invert opacity-90 animate-in fade-in zoom-in-95 duration-300" />
+              <img src="/cayr-logo.png" alt="Cayr Logo" className="h-8 w-auto object-contain opacity-90 animate-in fade-in zoom-in-95 duration-300" />
             )}
             {!isDrawerMode && (
               <div className="relative hidden md:block">
@@ -161,14 +161,14 @@ const Layout: React.FC<LayoutProps> = ({
                 <input
                   type="text"
                   placeholder="Search..."
-                  className="pl-12 pr-6 py-3 bg-white/95 backdrop-blur-md rounded-[20px] text-[13px] font-medium text-slate-700 outline-none focus:ring-4 focus:ring-white/20 w-64 lg:w-96 shadow-[0_10px_30px_rgba(0,0,0,0.15)] transition-all placeholder:text-slate-400"
+                  className="pl-12 pr-6 py-3 bg-[#FFFFFF] border border-[#D6E0EB] rounded-xl text-[13px] font-medium text-[#1C2B39] outline-none focus:ring-4 focus:ring-blue-500/10 w-64 lg:w-96 shadow-sm transition-all placeholder:text-[#9FB3C8]"
                 />
               </div>
             )}
           </div>
 
           <div className="flex items-center space-x-8">
-            <div className="flex items-center space-x-6 text-white">
+            <div className="flex items-center space-x-6 text-[#1e2d60]">
               <NotificationBell
                 notifications={notifications}
                 onClick={() => onModuleChange('Notifications')}
@@ -176,7 +176,7 @@ const Layout: React.FC<LayoutProps> = ({
             </div>
 
             <div
-              className="flex items-center space-x-4 px-6 py-2 bg-white/95 backdrop-blur-md rounded-[20px] cursor-pointer group focus:outline-none focus:ring-4 focus:ring-white/20 shadow-[0_10px_30px_rgba(0,0,0,0.15)] transition-all hover:bg-white"
+              className="flex items-center space-x-4 px-6 py-2 bg-[#FFFFFF] border border-[#D6E0EB] rounded-xl cursor-pointer group focus:outline-none focus:ring-4 focus:ring-blue-500/10 shadow-sm transition-all hover:bg-[#F4F7FB]"
               onClick={() => onModuleChange('Profile')}
               role="button"
               tabIndex={0}
@@ -196,7 +196,7 @@ const Layout: React.FC<LayoutProps> = ({
             {onToggleDrawerMode && (
               <button
                 onClick={onToggleDrawerMode}
-                className="hidden lg:flex items-center justify-center p-2 bg-white/5 hover:bg-white/10 rounded-2xl text-white transition-all shadow-[0_10px_30px_rgba(0,0,0,0.15)]"
+                className="hidden lg:flex items-center justify-center p-2 bg-[#FFFFFF] border border-[#D6E0EB] hover:bg-[#F4F7FB] rounded-lg text-[#1C2B39] transition-all shadow-sm"
                 title={isDrawerMode ? "Switch to Sidebar Mode" : "Switch to Drawer Mode"}
               >
                 <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d={isDrawerMode ? "M9 17V7m0 10a2 2 0 01-2 2H5a2 2 0 01-2-2V7a2 2 0 012-2h2a2 2 0 012 2m0 10a2 2 0 002 2h2a2 2 0 002-2M9 7a2 2 0 012-2h2a2 2 0 012 2m0 10V7m0 10a2 2 0 002 2h2a2 2 0 002-2V7a2 2 0 00-2-2h-2a2 2 0 00-2 2" : "M4 6h16M4 12h16m-7 6h7"} /></svg>

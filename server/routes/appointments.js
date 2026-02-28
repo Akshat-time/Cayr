@@ -2,6 +2,7 @@ import express from 'express';
 import Appointment from '../models/Appointment.js';
 import ChatSession from '../models/ChatSession.js';
 import DoctorProfile from '../models/DoctorProfile.js';
+import User from '../models/User.js';
 import { protect, requireRole } from '../middleware/authMiddleware.js';
 
 const router = express.Router();
@@ -21,9 +22,12 @@ router.post('/', protect, requireRole('patient'), async (req, res) => {
             return res.status(400).json({ error: 'doctorId, date, and time are required' });
         }
 
+        const patient = await User.findById(req.user.id);
+        if (!patient) return res.status(404).json({ error: 'Patient not found' });
+
         const appointment = new Appointment({
             patientId: req.user.id,
-            patientName: req.user.name,
+            patientName: patient.name,
             doctorId,
             doctorName: doctorName || 'Unknown Doctor',
             date,
