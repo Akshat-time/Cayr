@@ -97,7 +97,7 @@ router.post('/register/doctor', async (req, res) => {
         res.cookie('token', token, {
             httpOnly: true,
             secure: process.env.NODE_ENV === 'production',
-            sameSite: 'strict',
+            sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax',
             maxAge: 7 * 24 * 60 * 60 * 1000
         });
 
@@ -144,7 +144,7 @@ router.post('/register/patient', async (req, res) => {
         res.cookie('token', token, {
             httpOnly: true,
             secure: process.env.NODE_ENV === 'production',
-            sameSite: 'strict',
+            sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax',
             maxAge: 7 * 24 * 60 * 60 * 1000
         });
 
@@ -222,7 +222,7 @@ router.post('/login', async (req, res) => {
         res.cookie('token', token, {
             httpOnly: true,
             secure: process.env.NODE_ENV === 'production',
-            sameSite: 'strict',
+            sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax',
             maxAge: 7 * 24 * 60 * 60 * 1000
         });
 
@@ -239,7 +239,7 @@ router.post('/logout', (req, res) => {
     res.clearCookie('token', {
         httpOnly: true,
         secure: process.env.NODE_ENV === 'production',
-        sameSite: 'strict'
+        sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax'
     });
     res.json({ message: 'Logged out successfully' });
 });
