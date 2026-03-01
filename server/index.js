@@ -18,6 +18,9 @@ dotenv.config();
 const app = express();
 const PORT = process.env.PORT || 5000;
 
+// Trust Render/Vercel proxy so express-rate-limit reads real client IPs
+app.set('trust proxy', 1);
+
 // Security Middleware
 app.use(helmet());
 
@@ -49,7 +52,11 @@ app.use(cookieParser());
 const strictAuthLimiter = rateLimit({
     windowMs: 1 * 60 * 1000,
     max: 5,
-    message: { error: 'Too many login attempts, please try again later.' }
+    message: { error: 'Too many login attempts, please try again later.' },
+    keyGenerator: (req) => {
+        // Use real client IP from X-Forwarded-For (set by Vercel/Render proxy)
+        return req.ip || req.headers['x-forwarded-for'] || req.socket.remoteAddress;
+    }
 });
 
 // CSRF Protection (Origin Check)
