@@ -180,6 +180,8 @@ const ProfilePage: React.FC<ProfilePageProps> = ({ user, onUpdateProfile, onLogo
               experienceYears: data.experienceYears || '',
               clinicName: data.clinicName || '',
               consultationFee: data.consultationFee || '',
+              availableDays: data.availableDays || [],
+              availableTimeSlots: data.availableTimeSlots || [],
             });
           }
           return;
@@ -212,6 +214,8 @@ const ProfilePage: React.FC<ProfilePageProps> = ({ user, onUpdateProfile, onLogo
           experienceYears: (merged as any).experienceYears || (user as any).experienceYears || '',
           clinicName: (merged as any).clinicName || (user as any).clinicName || '',
           consultationFee: (merged as any).consultationFee || (user as any).consultationFee || '',
+          availableDays: (merged as any).availableDays || (user as any).availableDays || [],
+          availableTimeSlots: (merged as any).availableTimeSlots || (user as any).availableTimeSlots || [],
         });
       }
     };
@@ -314,6 +318,22 @@ const ProfilePage: React.FC<ProfilePageProps> = ({ user, onUpdateProfile, onLogo
   const handleArrayChange = (name: 'allergies' | 'conditions' | 'currentMedications', value: string) => {
     const items = value.split(',').map(i => i.trim()).filter(Boolean);
     setFormData(prev => ({ ...prev, [name]: items }));
+  };
+
+  const toggleDay = (day: string) => {
+    if (!isEditing) return;
+    setFormData(prev => {
+      const days = (prev as any).availableDays || [];
+      return { ...prev, availableDays: days.includes(day) ? days.filter((d: string) => d !== day) : [...days, day] };
+    });
+  };
+
+  const toggleSlot = (slot: string) => {
+    if (!isEditing) return;
+    setFormData(prev => {
+      const slots = (prev as any).availableTimeSlots || [];
+      return { ...prev, availableTimeSlots: slots.includes(slot) ? slots.filter((s: string) => s !== slot) : [...slots, slot] };
+    });
   };
 
   // ── Profile picture ──────────────────────────────────────────────────────
@@ -540,6 +560,11 @@ const ProfilePage: React.FC<ProfilePageProps> = ({ user, onUpdateProfile, onLogo
           <h1 className="text-3xl font-black text-slate-800 tracking-tight leading-none">
             {formData.firstName} {formData.lastName}
           </h1>
+          {user.cayrId && (
+            <p className="text-xs font-black text-slate-400 mt-2 mb-1">
+              # {user.cayrId}
+            </p>
+          )}
           <p className="text-sm font-black text-[#3b5bfd] uppercase tracking-[0.2em] mt-3">
             {isDoctor ? `Specialist Physician${(formData as any).specialty ? ' · ' + (formData as any).specialty : ''}` : 'Verified Patient Account'}
           </p>
@@ -721,6 +746,42 @@ const ProfilePage: React.FC<ProfilePageProps> = ({ user, onUpdateProfile, onLogo
                   <Field label="Clinic / Hospital Name">
                     <input disabled={!isEditing} name="clinicName" value={(formData as any).clinicName || ''} onChange={handleInputChange} className={inputCls(isEditing)} />
                   </Field>
+                </div>
+              </div>
+
+              <div className="mt-8 space-y-6">
+                <div>
+                  <p className="text-[10px] font-black uppercase tracking-[0.2em] text-indigo-400 mb-3">Available Days</p>
+                  <div className="flex flex-wrap gap-2">
+                    {['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'].map(day => (
+                      <button key={day} type="button" onClick={() => toggleDay(day)} disabled={!isEditing}
+                        className={`px-4 py-2 rounded-xl text-xs font-black uppercase tracking-wider transition-all disabled:opacity-60 disabled:cursor-not-allowed ${((formData as any).availableDays || []).includes(day)
+                          ? 'bg-indigo-600 text-white shadow-md'
+                          : 'bg-slate-100 text-slate-500 hover:bg-slate-200'
+                          }`}>
+                        {day.slice(0, 3)}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <div>
+                  <p className="text-[10px] font-black uppercase tracking-[0.2em] text-indigo-400 mb-3">Available Time Slots</p>
+                  <div className="flex flex-wrap gap-2">
+                    {[
+                      '08:00 - 09:00', '09:00 - 10:00', '10:00 - 11:00', '11:00 - 12:00',
+                      '12:00 - 13:00', '13:00 - 14:00', '14:00 - 15:00', '15:00 - 16:00',
+                      '16:00 - 17:00', '17:00 - 18:00', '18:00 - 19:00', '19:00 - 20:00',
+                    ].map(slot => (
+                      <button key={slot} type="button" onClick={() => toggleSlot(slot)} disabled={!isEditing}
+                        className={`px-3 py-2 rounded-xl text-xs font-bold transition-all disabled:opacity-60 disabled:cursor-not-allowed ${((formData as any).availableTimeSlots || []).includes(slot)
+                          ? 'bg-indigo-600 text-white shadow-md'
+                          : 'bg-slate-100 text-slate-500 hover:bg-slate-200'
+                          }`}>
+                        {slot}
+                      </button>
+                    ))}
+                  </div>
                 </div>
               </div>
             </section>

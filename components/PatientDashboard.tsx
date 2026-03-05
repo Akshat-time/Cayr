@@ -87,6 +87,12 @@ const PatientDashboard: React.FC<PatientDashboardProps> = ({
 
   const chatSessionRef = useRef<any>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
+  const chatScrollRef = useRef<HTMLDivElement>(null);
+  const [isRecording, setIsRecording] = useState(false);
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const audioChunksRef = useRef<Blob[]>([]);
+  const [isPredictingSpeech, setIsPredictingSpeech] = useState(false);
+  const recognitionRef = useRef<any>(null);
 
   useEffect(() => {
     setActiveTab(initialView);
@@ -132,6 +138,9 @@ const PatientDashboard: React.FC<PatientDashboardProps> = ({
     return () => clearInterval(interval);
   }, [chatSelectedId]);
 
+  useEffect(() => {
+    chatScrollRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [chatLocalMessages, chatSelectedId]);
 
   const handleSendMessage = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -505,13 +514,24 @@ const PatientDashboard: React.FC<PatientDashboardProps> = ({
               <div className="space-y-2">
                 <label className="text-[12px] font-semibold uppercase tracking-wide text-[#6B7C8F] ml-1">Visit Date</label>
                 <input type="date" value={bookingDate} onChange={e => setBookingDate(e.target.value)} className="w-full p-4 bg-[#F4F7FB] border border-[#D6E0EB] rounded-[10px] text-[14px] font-medium outline-none focus:bg-[#FFFFFF] focus:border-[#1F4E79] transition-colors text-[#1C2B39]" />
+                {selectedDoctorId && doctors.find(d => d.id === selectedDoctorId)?.profile?.availableDays?.length > 0 && (
+                  <p className="text-[11px] font-medium text-[#1F4E79] ml-1 mt-1">
+                    Available Days: {doctors.find(d => d.id === selectedDoctorId)?.profile?.availableDays.join(', ')}
+                  </p>
+                )}
               </div>
               <div className="space-y-4">
                 <label className="text-[12px] font-semibold uppercase tracking-wide text-[#6B7C8F] ml-1">Time Slot</label>
                 <div className="grid grid-cols-2 gap-3">
-                  {['09:00 AM', '11:00 AM', '02:00 PM', '04:30 PM'].map(t => (
-                    <button key={t} onClick={() => setBookingTime(t)} className={`py-3 rounded-[8px] text-[13px] font-semibold transition-colors border ${bookingTime === t ? 'bg-[#1F4E79] text-[#FFFFFF] border-[#1F4E79] shadow-sm' : 'bg-[#FFFFFF] text-[#6B7C8F] border-[#E3EAF2] hover:border-[#D6E0EB] hover:bg-[#F4F7FB]'}`}>{t}</button>
-                  ))}
+                  {(() => {
+                    const selectedDoc = doctors.find(d => d.id === selectedDoctorId);
+                    const slots = selectedDoc?.profile?.availableTimeSlots?.length > 0
+                      ? selectedDoc.profile.availableTimeSlots
+                      : ['09:00 - 10:00', '10:00 - 11:00', '11:00 - 12:00', '14:00 - 15:00'];
+                    return slots.map(t => (
+                      <button key={t} onClick={() => setBookingTime(t)} className={`py-3 rounded-[8px] text-[13px] font-semibold transition-colors border ${bookingTime === t ? 'bg-[#1F4E79] text-[#FFFFFF] border-[#1F4E79] shadow-sm' : 'bg-[#FFFFFF] text-[#6B7C8F] border-[#E3EAF2] hover:border-[#D6E0EB] hover:bg-[#F4F7FB]'}`}>{t}</button>
+                    ));
+                  })()}
                 </div>
               </div>
             </div>
@@ -576,7 +596,13 @@ const PatientDashboard: React.FC<PatientDashboardProps> = ({
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-          {filteredDoctors.map(doc => (
+          {filteredDoctors.length === 0 ? (
+            <div className="col-span-full py-20 text-center">
+              <div className="w-20 h-20 bg-[#F4F7FB] rounded-[16px] text-3xl mx-auto flex items-center justify-center border border-[#D6E0EB] mb-4 grayscale opacity-50">👨‍⚕️</div>
+              <p className="text-[16px] font-semibold text-[#1C2B39]">No specialists found</p>
+              <p className="text-[13px] font-medium text-[#6B7C8F] mt-1">Try adjusting your search criteria</p>
+            </div>
+          ) : filteredDoctors.map(doc => (
             <div key={doc.id} className="bg-[#FFFFFF] rounded-[16px] p-6 shadow-[0_8px_30px_rgba(15,42,67,0.12)] border border-[#E3EAF2] group hover:border-[#D6E0EB] transition-colors">
               <div className="flex items-center gap-5 mb-6">
                 <div className="w-16 h-16 rounded-[12px] overflow-hidden border border-[#D6E0EB]">
@@ -688,10 +714,26 @@ const PatientDashboard: React.FC<PatientDashboardProps> = ({
                 </div>
                 <div className="flex gap-3">
                   <button
-                    onClick={() => setIsBridgeOpen(true)}
-                    className="p-2.5 bg-[#F0F4F9] text-[#1F4E79] rounded-[8px] hover:bg-[#E3EAF2] transition-colors border border-[#D6E0EB]"
+                    onClick={async () => {
+                      if (!chatSelectedId) return;
+                      try {
+                        const res = await fetch(`/api/chats/${chatSelectedId}/notify-video`, { method: 'POST', credentials: 'include' });
+                        if (res.ok) alert(`Video consultation request sent to Dr. ${activeChat?.doctorName}`);
+                      } catch (e) {
+                        console.error(e);
+                      }
+                    }}
+                    title="Request Video Consultation"
+                    className="p-2.5 bg-rose-50 text-rose-600 rounded-[8px] hover:bg-rose-100 transition-colors border border-rose-200"
                   >
                     <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" /></svg>
+                  </button>
+                  <button
+                    onClick={() => setIsBridgeOpen(true)}
+                    title="Launch Voice Interpreter"
+                    className="p-2.5 bg-[#F0F4F9] text-[#1F4E79] rounded-[8px] hover:bg-[#E3EAF2] transition-colors border border-[#D6E0EB]"
+                  >
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 5h12M9 3v2m1.048 9.5A18.022 18.022 0 016.412 9m6.088 9h7M11 21l5-10 5 10M12.751 5C11.783 10.77 8.07 15.61 3 18.129" /></svg>
                   </button>
                 </div>
               </div>
@@ -718,13 +760,18 @@ const PatientDashboard: React.FC<PatientDashboardProps> = ({
                       <div className="w-8 h-8 rounded-[8px] bg-[#F4F7FB] overflow-hidden shrink-0 border border-[#D6E0EB]"><img src={`https://api.dicebear.com/7.x/avataaars/svg?seed=Dr_${activeChat?.doctorName}`} alt="" className="w-full h-full object-cover" /></div>
                     )}
                     <div className={`${msg.senderId === user.id ? 'bg-[#1F4E79] text-[#FFFFFF] rounded-tr-sm shadow-sm' : 'bg-[#FFFFFF] text-[#1C2B39] rounded-tl-sm border border-[#E3EAF2] shadow-sm'} p-4 rounded-[12px] max-w-[80%]`}>
-                      <p className="text-[14px] font-medium">{msg.text || msg.content}</p>
+                      {msg.type === 'voice' || msg.audioData ? (
+                        <audio src={msg.audioData} controls className="max-w-[200px] h-8" />
+                      ) : (
+                        <p className="text-[14px] font-medium">{msg.text || msg.content}</p>
+                      )}
                       <p className={`text-[10px] font-medium mt-2 ${msg.senderId === user.id ? 'text-[#9FB3C8]' : 'text-[#6B7C8F]'}`}>
                         {new Date(msg.createdAt || msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                       </p>
                     </div>
                   </div>
                 ))}
+                <div ref={chatScrollRef} />
               </div>
 
               <div className="p-5 border-t border-[#E3EAF2] bg-[#FFFFFF]">
@@ -737,6 +784,44 @@ const PatientDashboard: React.FC<PatientDashboardProps> = ({
                     placeholder="Type your message..."
                     className="flex-1 bg-[#F4F7FB] border border-[#D6E0EB] rounded-[8px] px-4 py-3 text-[14px] font-medium text-[#1C2B39] outline-none focus:bg-[#FFFFFF] focus:border-[#1F4E79] transition-colors placeholder:text-[#9FB3C8]"
                   />
+                  <button
+                    onClick={async () => {
+                      if (isRecording && mediaRecorderRef.current) {
+                        mediaRecorderRef.current.stop();
+                        setIsRecording(false);
+                      } else {
+                        try {
+                          const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                          const recorder = new MediaRecorder(stream);
+                          audioChunksRef.current = [];
+                          recorder.ondataavailable = e => { if (e.data.size > 0) audioChunksRef.current.push(e.data); };
+                          recorder.onstop = () => {
+                            const blob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
+                            const reader = new FileReader();
+                            reader.readAsDataURL(blob);
+                            reader.onloadend = async () => {
+                              const audioData = reader.result as string;
+                              try {
+                                await fetch(`/api/chats/${chatSelectedId}/messages`, {
+                                  method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ type: 'voice', audioData })
+                                });
+                              } catch (e) { console.error('Voice note send failed', e); }
+                            };
+                            stream.getTracks().forEach(t => t.stop());
+                          };
+                          recorder.start();
+                          mediaRecorderRef.current = recorder;
+                          setIsRecording(true);
+                        } catch (e) {
+                          alert('Microphone access required for voice notes.');
+                        }
+                      }
+                    }}
+                    className={`p-3 rounded-[8px] flex items-center justify-center transition-all ${isRecording ? 'bg-rose-500 text-white animate-pulse shadow-rose-500/30' : 'bg-[#F0F4F9] text-[#1F4E79] border border-[#D6E0EB] hover:bg-[#E3EAF2]'}`}
+                    title={isRecording ? "Stop Recording" : "Send Voice Note"}
+                  >
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" /></svg>
+                  </button>
                   <button
                     onClick={handleSendMessage}
                     className="px-6 py-3 bg-[#1F4E79] text-[#FFFFFF] rounded-[8px] hover:bg-[#163A5C] transition-colors shadow-sm font-medium text-[14px] flex items-center justify-center"
@@ -1103,6 +1188,35 @@ const PatientDashboard: React.FC<PatientDashboardProps> = ({
               )}
               <form onSubmit={handleSendMessage} className="flex space-x-3">
                 <input value={chatInput} onChange={e => setChatInput(e.target.value)} placeholder="Provide clinical details..." className="flex-1 px-4 py-3 bg-[#F4F7FB] border border-[#D6E0EB] rounded-[12px] text-[14px] font-medium text-[#1C2B39] outline-none focus:bg-[#FFFFFF] focus:border-[#1F4E79] transition-colors placeholder:text-[#9FB3C8]" />
+                <button
+                  type="button"
+                  onClick={() => {
+                    const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+                    if (!SpeechRecognition) return alert('Speech recognition not supported in this browser.');
+                    if (isPredictingSpeech && recognitionRef.current) {
+                      recognitionRef.current.stop();
+                      setIsPredictingSpeech(false);
+                      return;
+                    }
+                    const recognition = new SpeechRecognition();
+                    recognition.continuous = false;
+                    recognition.interimResults = false;
+                    recognition.onresult = (event: any) => {
+                      const transcript = event.results[0][0].transcript;
+                      setChatInput(prev => prev + (prev.endsWith(' ') || prev === '' ? '' : ' ') + transcript);
+                      setIsPredictingSpeech(false);
+                    };
+                    recognition.onerror = () => setIsPredictingSpeech(false);
+                    recognition.onend = () => setIsPredictingSpeech(false);
+                    recognition.start();
+                    recognitionRef.current = recognition;
+                    setIsPredictingSpeech(true);
+                  }}
+                  className={`w-14 h-auto rounded-[12px] flex items-center justify-center transition-all shrink-0 ${isPredictingSpeech ? 'bg-rose-500 text-white animate-pulse' : 'bg-[#F0F4F9] border border-[#D6E0EB] text-[#1F4E79] hover:bg-[#E3EAF2]'}`}
+                  title="Voice Typing"
+                >
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" /></svg>
+                </button>
                 <button type="submit" disabled={isTyping || !chatInput.trim()} className="w-14 h-auto bg-[#1F4E79] text-[#FFFFFF] rounded-[12px] flex items-center justify-center shadow-sm hover:bg-[#163A5C] active:scale-95 transition-all group disabled:opacity-50 disabled:bg-[#D6E0EB] disabled:text-[#6B7C8F]">
                   <span className="group-hover:translate-x-1 transition-transform font-bold">➜</span>
                 </button>

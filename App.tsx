@@ -288,7 +288,7 @@ const AppContent: React.FC = () => {
     if (!user) return;
     try {
       const endpoint = (user.role || '').toLowerCase() === 'patient' ? '/api/appointments/patient' : '/api/appointments/doctor';
-      const res = await fetch(endpoint);
+      const res = await fetch(endpoint, { credentials: 'include' });
       if (res.ok) {
         const data = await res.json();
         setAppointments(data.map((a: any) => ({ ...a, id: a._id })));
@@ -300,7 +300,7 @@ const AppContent: React.FC = () => {
     if (!user) return;
     try {
       const endpoint = (user.role || '').toLowerCase() === 'patient' ? '/api/reports/patient' : '/api/reports/doctor';
-      const res = await fetch(endpoint);
+      const res = await fetch(endpoint, { credentials: 'include' });
       if (res.ok) {
         const data = await res.json();
         setMedicalReports(data.map((r: any) => ({ ...r, id: r._id })));
@@ -310,7 +310,7 @@ const AppContent: React.FC = () => {
 
   const fetchPatients = async () => {
     try {
-      const res = await fetch('/api/users?role=patient');
+      const res = await fetch('/api/users?role=patient', { credentials: 'include' });
       if (res.ok) {
         const data = await res.json();
         setPatients(data.map((p: any) => ({ ...p, id: p._id })));
@@ -320,7 +320,7 @@ const AppContent: React.FC = () => {
 
   const fetchDoctors = async () => {
     try {
-      const res = await fetch('/api/users?role=doctor');
+      const res = await fetch('/api/users?role=doctor', { credentials: 'include' });
       if (res.ok) {
         const data = await res.json();
         setDoctors(data.map((d: any) => ({ ...d, id: d._id })));
@@ -334,6 +334,7 @@ const AppContent: React.FC = () => {
       const res = await fetch('/api/appointments', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
         body: JSON.stringify({ doctorId, doctorName, date, time }),
       });
       if (res.ok) {
@@ -354,7 +355,7 @@ const AppContent: React.FC = () => {
       else if (status === AppointmentStatus.COMPLETED) endpoint = `/api/appointments/${id}/complete`;
       else if (status === AppointmentStatus.CANCELLED) endpoint = `/api/appointments/${id}/cancel`;
       else return;
-      const res = await fetch(endpoint, { method: 'PATCH' });
+      const res = await fetch(endpoint, { method: 'PATCH', credentials: 'include' });
       if (res.ok) await fetchAppointments();
     } catch (err) { console.error('Update appointment failed', err); }
   };
@@ -365,6 +366,7 @@ const AppContent: React.FC = () => {
       const res = await fetch('/api/reports', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
         body: JSON.stringify(data),
       });
       if (res.ok) await fetchMedicalReports();
@@ -376,6 +378,7 @@ const AppContent: React.FC = () => {
       const res = await fetch(`/api/users/${patient.id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
         body: JSON.stringify(patient),
       });
       if (res.ok) {

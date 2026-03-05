@@ -171,6 +171,7 @@ export interface PatientRecord {
 
 export interface User {
   id: string;
+  cayrId?: string;
   name: string;
   firstName?: string;
   lastName?: string;

@@ -18,12 +18,11 @@ const buildUserPayload = async (user) => {
         phone: user.phone,
         specialty: user.specialty,
         dob: user.dob,
-        gender: user.gender,
         address: user.address,
-        // Legacy flags
-        intakeCompleted: user.intakeCompleted || false,
-        intakeSkipped: user.intakeSkipped || false,
     };
+    base.intakeCompleted = user.intakeCompleted || false;
+    base.intakeSkipped = user.intakeSkipped || false;
+    base.cayrId = user.cayrId;
 
     // For patients, look up their intake status from IntakeRecord
     if (user.role === 'patient') {
@@ -49,7 +48,8 @@ router.post('/register/doctor', async (req, res) => {
             name, email, password, phone,
             licenseNumber, specialization, experienceYears,
             clinicName, consultationFee,
-            availableDays, availableTimeSlots
+            availableDays, availableTimeSlots,
+            dob, addressDetails
         } = req.body;
 
         // Required field check
@@ -72,8 +72,18 @@ router.post('/register/doctor', async (req, res) => {
 
         const hashedPassword = await bcrypt.hash(password, 10);
 
+        // Generate CAYR ID
+        const prefix = 'DR';
+        const datePart = dob ? dob.replace(/-/g, '') : new Date().toISOString().slice(0, 10).replace(/-/g, '');
+        const namePart = name.replace(/\s/g, '').substring(0, 3).toUpperCase().padEnd(3, 'X');
+        const randomPart = Math.floor(10 + Math.random() * 90);
+        const cayrId = `CAYR-${prefix}-${datePart}-${namePart}${randomPart}`;
+
         // Create base user with role = doctor
-        const user = new User({ name, email, password: hashedPassword, role: 'doctor' });
+        const user = new User({
+            name, email, password: hashedPassword, role: 'doctor',
+            dob, addressDetails, cayrId
+        });
         await user.save();
 
         // Create linked DoctorProfile
@@ -113,7 +123,7 @@ router.post('/register/doctor', async (req, res) => {
 // ── Dedicated Patient Registration ──────────────────────────────────────────
 router.post('/register/patient', async (req, res) => {
     try {
-        const { name, email, password, phone } = req.body;
+        const { name, email, password, phone, dob, addressDetails } = req.body;
 
         if (!name || !email || !password) {
             return res.status(400).json({ error: 'Name, email, and password are required.' });
@@ -127,8 +137,18 @@ router.post('/register/patient', async (req, res) => {
 
         const hashedPassword = await bcrypt.hash(password, 10);
 
+        // Generate CAYR ID
+        const prefix = 'PT';
+        const datePart = dob ? dob.replace(/-/g, '') : new Date().toISOString().slice(0, 10).replace(/-/g, '');
+        const namePart = name.replace(/\s/g, '').substring(0, 3).toUpperCase().padEnd(3, 'X');
+        const randomPart = Math.floor(10 + Math.random() * 90);
+        const cayrId = `CAYR-${prefix}-${datePart}-${namePart}${randomPart}`;
+
         // Create base user with role = patient
-        const user = new User({ name, email, password: hashedPassword, role: 'patient' });
+        const user = new User({
+            name, email, password: hashedPassword, role: 'patient',
+            dob, addressDetails, cayrId
+        });
         await user.save();
 
         // Create linked PatientProfile
@@ -155,6 +175,7 @@ router.post('/register/patient', async (req, res) => {
                 name: user.name,
                 email: user.email,
                 role: user.role,
+                cayrId: user.cayrId,
                 intakeCompleted: user.intakeCompleted || false,
                 intakeSkipped: user.intakeSkipped || false
             }

@@ -81,6 +81,15 @@ const DoctorDashboard: React.FC<DoctorDashboardProps> = ({
    const [chatSelectedId, setChatSelectedId] = useState<string | null>(null);
    const [chatNewMessage, setChatNewMessage] = useState('');
    const [chatLocalMessages, setChatLocalMessages] = useState<Record<string, any[]>>({});
+   const [videoCallRequested, setVideoCallRequested] = useState(false);
+
+   const chatScrollRef = React.useRef<HTMLDivElement>(null);
+   const [isRecording, setIsRecording] = useState(false);
+   const mediaRecorderRef = React.useRef<MediaRecorder | null>(null);
+   const audioChunksRef = React.useRef<Blob[]>([]);
+
+   const [isPredictingSpeech, setIsPredictingSpeech] = useState(false);
+   const recognitionRef = React.useRef<any>(null);
 
    const [darkMode, setDarkMode] = useState<boolean>(() => {
       try { return localStorage.getItem('doctorDarkMode') === 'true'; } catch { return false; }
@@ -109,6 +118,7 @@ const DoctorDashboard: React.FC<DoctorDashboardProps> = ({
             if (res.ok) {
                const data = await res.json();
                setChatLocalMessages(prev => ({ ...prev, [chatSelectedId]: data.messages }));
+               setVideoCallRequested(!!data.session?.videoCallRequested);
             }
          } catch (err) { }
       };
@@ -118,6 +128,10 @@ const DoctorDashboard: React.FC<DoctorDashboardProps> = ({
       }
       return () => clearInterval(interval);
    }, [chatSelectedId]);
+
+   useEffect(() => {
+      chatScrollRef.current?.scrollIntoView({ behavior: 'smooth' });
+   }, [chatLocalMessages, chatSelectedId]);
 
    // Build chart data: count of appointments per day for the current calendar month
    const appointmentsChartData = useMemo(() => {
@@ -552,46 +566,71 @@ const DoctorDashboard: React.FC<DoctorDashboardProps> = ({
       );
    };
 
-   const renderPatients = () => (
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 animate-in fade-in">
-         {patients.map(p => (
-            <div key={p.id} className="bg-[#FFFFFF] border border-[#E3EAF2] p-6 rounded-[14px] shadow-[0_4px_14px_rgba(16,42,67,0.06)] hover:shadow-[0_8px_20px_rgba(16,42,67,0.08)] transition-all">
-               <div className="flex items-center gap-4 mb-6">
-                  <div className="w-14 h-14 rounded-full bg-[#EAF1F8] overflow-hidden border border-[#D6E0EB]">
-                     <img src={`https://api.dicebear.com/7.x/avataaars/svg?seed=${p.name}`} alt="" className="w-full h-full object-cover" />
-                  </div>
-                  <div>
-                     <h3 className="text-[16px] font-semibold text-[#1C2B39]">{p.name}</h3>
-                     <p className="text-[12px] font-medium text-[#6B7C8F] mt-0.5">{p.age}y &bull; {p.bloodType}</p>
-                  </div>
-               </div>
-               <div className="flex gap-2">
-                  <button onClick={() => { setSelectedPatientId(p.id); setLocalView('My Patients'); }} className="flex-1 py-2 bg-[#F0F4F9] border border-[#D6E0EB] text-[#1F4E79] rounded-lg font-medium text-[11px] hover:bg-[#E3EAF2] transition-colors">Profile</button>
-                  <button onClick={() => handleFetchPatientIntakeReports(p)} className="flex-1 py-2 bg-[#F0F4F9] border border-[#D6E0EB] text-[#1F4E79] rounded-lg font-medium text-[11px] hover:bg-[#E3EAF2] transition-colors">History</button>
-                  <button onClick={() => { setWritingReportFor(p); setMedicines([]); setReportData({ diagnosis: '', notes: '' }); setIsReportModalOpen(true); }} className="flex-1 py-2 bg-[#1F4E79] text-[#FFFFFF] rounded-lg font-medium text-[11px] shadow-sm hover:bg-[#163A5C] transition-colors">Report</button>
-               </div>
-            </div>
-         ))}
-      </div>
-   );
+   const renderPatients = () => {
+      const consultedPatientIds = new Set(
+         appointments
+            .filter(a => a.status === AppointmentStatus.CONFIRMED || a.status === AppointmentStatus.COMPLETED)
+            .map(a => a.patientId)
+      );
+      const filteredPatients = patients.filter(p => consultedPatientIds.has(p.id));
 
-   const renderRecords = () => (
-      <div className="grid grid-cols-1 lg:grid-cols-4 gap-8 animate-in fade-in">
-         <div className="col-span-1 p-6 bg-[#FFFFFF] border border-[#E3EAF2] rounded-[16px] shadow-[0_4px_14px_rgba(16,42,67,0.04)]">
-            <h3 className="text-[12px] font-medium text-[#6B7C8F] uppercase tracking-wide mb-4">Roster</h3>
-            <div className="space-y-2">{patients.map(p => (<button key={p.id} onClick={() => setSelectedPatientId(p.id)} className={`w-full p-3 rounded-lg text-left font-semibold text-[14px] transition-colors ${selectedPatientId === p.id ? 'bg-[#1F4E79] text-[#FFFFFF] shadow-sm' : 'text-[#5C6B7A] hover:bg-[#F4F7FB]'}`}>{p.name}</button>))}</div>
+      return (
+         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 animate-in fade-in">
+            {filteredPatients.map(p => (
+               <div key={p.id} className="bg-[#FFFFFF] border border-[#E3EAF2] p-6 rounded-[14px] shadow-[0_4px_14px_rgba(16,42,67,0.06)] hover:shadow-[0_8px_20px_rgba(16,42,67,0.08)] transition-all">
+                  <div className="flex items-center gap-4 mb-6">
+                     <div className="w-14 h-14 rounded-full bg-[#EAF1F8] overflow-hidden border border-[#D6E0EB]">
+                        <img src={`https://api.dicebear.com/7.x/avataaars/svg?seed=${p.name}`} alt="" className="w-full h-full object-cover" />
+                     </div>
+                     <div>
+                        <h3 className="text-[16px] font-semibold text-[#1C2B39]">{p.name}</h3>
+                        <p className="text-[12px] font-medium text-[#6B7C8F] mt-0.5">{p.age}y &bull; {p.bloodType}</p>
+                     </div>
+                  </div>
+                  <div className="flex gap-2">
+                     <button onClick={() => { setSelectedPatientId(p.id); setLocalView('My Patients'); }} className="flex-1 py-2 bg-[#F0F4F9] border border-[#D6E0EB] text-[#1F4E79] rounded-lg font-medium text-[11px] hover:bg-[#E3EAF2] transition-colors">Profile</button>
+                     <button onClick={() => handleFetchPatientIntakeReports(p)} className="flex-1 py-2 bg-[#F0F4F9] border border-[#D6E0EB] text-[#1F4E79] rounded-lg font-medium text-[11px] hover:bg-[#E3EAF2] transition-colors">History</button>
+                     <button onClick={() => { setWritingReportFor(p); setMedicines([]); setReportData({ diagnosis: '', notes: '' }); setIsReportModalOpen(true); }} className="flex-1 py-2 bg-[#1F4E79] text-[#FFFFFF] rounded-lg font-medium text-[11px] shadow-sm hover:bg-[#163A5C] transition-colors">Report</button>
+                  </div>
+               </div>
+            ))}
+            {filteredPatients.length === 0 && (
+               <div className="col-span-full py-20 text-center">
+                  <div className="w-20 h-20 bg-[#F4F7FB] rounded-[16px] text-3xl mx-auto flex items-center justify-center border border-[#D6E0EB] mb-4 grayscale opacity-50">👥</div>
+                  <p className="text-[16px] font-semibold text-[#1C2B39]">No Patients Yet</p>
+                  <p className="text-[13px] font-medium text-[#6B7C8F] mt-1">Accept appointment requests to build your patient list.</p>
+               </div>
+            )}
          </div>
-         <div className="col-span-3 space-y-6">
-            <div className="bg-[#FFFFFF] border border-[#E3EAF2] p-10 rounded-[16px] shadow-[0_4px_14px_rgba(16,42,67,0.04)] text-[#1C2B39]">
-               <h2 className="text-[26px] font-semibold mb-6">{activePatient?.name}</h2>
-               <div className="grid grid-cols-2 gap-8">
-                  <div><h4 className="text-[13px] uppercase text-[#1F4E79] mb-4 font-semibold tracking-wide">History</h4><div className="space-y-4">{activePatient?.history?.map((h, i) => (<div key={i} className="flex gap-3"><div className="w-2 h-2 bg-[#1F4E79] rounded-full mt-1.5 shrink-0" /><p className="text-[14px] font-semibold">{h.condition} <span className="block text-[11px] text-[#6B7C8F] mt-0.5">{h.date}</span></p></div>))}</div></div>
-                  <div><h4 className="text-[13px] uppercase text-[#1F4E79] mb-4 font-semibold tracking-wide">Reports</h4><div className="space-y-3">{medicalReports.filter(r => r.patientId === activePatient?.id).map(r => (<div key={r.id} className="bg-[#F4F7FB] border border-[#E3EAF2] p-4 rounded-lg flex justify-between items-center"><span className="text-[12px] font-semibold text-[#1C2B39]">{r.title}</span><button onClick={() => handleDownloadReport(r.fileData, r.fileName)} className="text-[#1F4E79] hover:text-[#0F2A43] font-semibold text-[11px] uppercase tracking-wide transition-colors">Download</button></div>))}</div></div>
+      );
+   };
+
+   const renderRecords = () => {
+      const consultedPatientIds = new Set(
+         appointments
+            .filter(a => a.status === AppointmentStatus.CONFIRMED || a.status === AppointmentStatus.COMPLETED)
+            .map(a => a.patientId)
+      );
+      const filteredPatients = patients.filter(p => consultedPatientIds.has(p.id));
+
+      return (
+         <div className="grid grid-cols-1 lg:grid-cols-4 gap-8 animate-in fade-in">
+            <div className="col-span-1 p-6 bg-[#FFFFFF] border border-[#E3EAF2] rounded-[16px] shadow-[0_4px_14px_rgba(16,42,67,0.04)]">
+               <h3 className="text-[12px] font-medium text-[#6B7C8F] uppercase tracking-wide mb-4">Roster</h3>
+               <div className="space-y-2">{filteredPatients.map(p => (<button key={p.id} onClick={() => setSelectedPatientId(p.id)} className={`w-full p-3 rounded-lg text-left font-semibold text-[14px] transition-colors ${selectedPatientId === p.id ? 'bg-[#1F4E79] text-[#FFFFFF] shadow-sm' : 'text-[#5C6B7A] hover:bg-[#F4F7FB]'}`}>{p.name}</button>))}</div>
+            </div>
+            <div className="col-span-3 space-y-6">
+               <div className="bg-[#FFFFFF] border border-[#E3EAF2] p-10 rounded-[16px] shadow-[0_4px_14px_rgba(16,42,67,0.04)] text-[#1C2B39]">
+                  <h2 className="text-[26px] font-semibold mb-6">{activePatient?.name}</h2>
+                  <div className="grid grid-cols-2 gap-8">
+                     <div><h4 className="text-[13px] uppercase text-[#1F4E79] mb-4 font-semibold tracking-wide">History</h4><div className="space-y-4">{activePatient?.history?.map((h, i) => (<div key={i} className="flex gap-3"><div className="w-2 h-2 bg-[#1F4E79] rounded-full mt-1.5 shrink-0" /><p className="text-[14px] font-semibold">{h.condition} <span className="block text-[11px] text-[#6B7C8F] mt-0.5">{h.date}</span></p></div>))}</div></div>
+                     <div><h4 className="text-[13px] uppercase text-[#1F4E79] mb-4 font-semibold tracking-wide">Reports</h4><div className="space-y-3">{medicalReports.filter(r => r.patientId === activePatient?.id).map(r => (<div key={r.id} className="bg-[#F4F7FB] border border-[#E3EAF2] p-4 rounded-lg flex justify-between items-center"><span className="text-[12px] font-semibold text-[#1C2B39]">{r.title}</span><button onClick={() => handleDownloadReport(r.fileData, r.fileName)} className="text-[#1F4E79] hover:text-[#0F2A43] font-semibold text-[11px] uppercase tracking-wide transition-colors">Download</button></div>))}</div></div>
+                  </div>
                </div>
             </div>
          </div>
-      </div>
-   );
+      );
+   };
 
    const renderPayouts = () => (
       <div className="space-y-6 animate-in fade-in duration-700 text-[#1C2B39]">
@@ -664,11 +703,27 @@ const DoctorDashboard: React.FC<DoctorDashboardProps> = ({
                            </div>
                         </div>
                         <div className="flex gap-3">
+                           {videoCallRequested && (
+                              <button
+                                 onClick={async () => {
+                                    try {
+                                       await fetch(`/api/chats/${chatSelectedId}/video-accepted`, { method: 'PATCH', credentials: 'include' });
+                                       setVideoCallRequested(false);
+                                    } catch (e) { }
+                                    if (onStartCall && activeChat) onStartCall(activeChat.patientName);
+                                 }}
+                                 className="px-4 py-2 bg-rose-50 border border-rose-200 text-rose-600 font-semibold text-[13px] rounded-lg hover:bg-rose-100 transition-all shadow-sm flex items-center gap-2 animate-pulse"
+                              >
+                                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" /></svg>
+                                 Start Video Call
+                              </button>
+                           )}
                            <button
                               onClick={() => setIsBridgeOpen(true)}
+                              title="Launch Voice Interpreter"
                               className="p-2.5 bg-[#F0F4F9] border border-[#D6E0EB] text-[#1F4E79] rounded-lg hover:bg-[#E3EAF2] transition-all shadow-sm"
                            >
-                              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" /></svg>
+                              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 5h12M9 3v2m1.048 9.5A18.022 18.022 0 016.412 9m6.088 9h7M11 21l5-10 5 10M12.751 5C11.783 10.77 8.07 15.61 3 18.129" /></svg>
                            </button>
                         </div>
                      </div>
@@ -693,13 +748,18 @@ const DoctorDashboard: React.FC<DoctorDashboardProps> = ({
                                  <div className="w-8 h-8 rounded-full border border-[#D6E0EB] bg-[#F4F7FB] overflow-hidden shrink-0"><img src={`https://api.dicebear.com/7.x/avataaars/svg?seed=${msg.senderName}`} alt="" className="w-full h-full object-cover" /></div>
                               )}
                               <div className={`${msg.senderId === user.id ? 'bg-[#1F4E79] border-transparent text-white rounded-tr-none' : 'bg-[#FFFFFF] border-[#E3EAF2] text-[#1C2B39] rounded-tl-none'} border p-4 rounded-xl shadow-sm max-w-[80%]`}>
-                                 <p className="text-[13px] font-medium leading-relaxed">{msg.text || msg.content}</p>
+                                 {msg.type === 'voice' || msg.audioData ? (
+                                    <audio src={msg.audioData} controls className="max-w-[200px] h-8" />
+                                 ) : (
+                                    <p className="text-[13px] font-medium leading-relaxed">{msg.text || msg.content}</p>
+                                 )}
                                  <p className={`text-[10px] font-medium mt-2 ${msg.senderId === user.id ? 'text-[#9FB3C8]' : 'text-[#6B7C8F]'}`}>
                                     {new Date(msg.createdAt || msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                                  </p>
                               </div>
                            </div>
                         ))}
+                        <div ref={chatScrollRef} />
                      </div>
 
                      <div className="p-6 border-t border-[#E3EAF2] bg-[#FFFFFF]">
@@ -712,6 +772,72 @@ const DoctorDashboard: React.FC<DoctorDashboardProps> = ({
                               placeholder="Type your message..."
                               className="flex-1 bg-[#F4F7FB] border border-[#D6E0EB] rounded-lg px-6 py-3.5 text-[14px] font-medium text-[#1C2B39] outline-none focus:ring-4 focus:ring-[#1F4E79]/10 placeholder:text-[#9FB3C8] transition-all"
                            />
+                           <button
+                              onClick={() => {
+                                 const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+                                 if (!SpeechRecognition) return alert('Speech recognition not supported in this browser.');
+                                 if (isPredictingSpeech && recognitionRef.current) {
+                                    recognitionRef.current.stop();
+                                    setIsPredictingSpeech(false);
+                                    return;
+                                 }
+                                 const recognition = new SpeechRecognition();
+                                 recognition.continuous = false;
+                                 recognition.interimResults = false;
+                                 recognition.onresult = (event: any) => {
+                                    const transcript = event.results[0][0].transcript;
+                                    setChatNewMessage(prev => prev + (prev.endsWith(' ') || prev === '' ? '' : ' ') + transcript);
+                                    setIsPredictingSpeech(false);
+                                 };
+                                 recognition.onerror = () => setIsPredictingSpeech(false);
+                                 recognition.onend = () => setIsPredictingSpeech(false);
+                                 recognition.start();
+                                 recognitionRef.current = recognition;
+                                 setIsPredictingSpeech(true);
+                              }}
+                              className={`p-3.5 rounded-lg flex items-center justify-center transition-all ${isPredictingSpeech ? 'bg-rose-500 text-white animate-pulse' : 'bg-[#F0F4F9] text-[#1F4E79] border border-[#D6E0EB] hover:bg-[#E3EAF2]'}`}
+                              title="Voice Typing"
+                           >
+                              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" /></svg>
+                           </button>
+                           <button
+                              onClick={async () => {
+                                 if (isRecording && mediaRecorderRef.current) {
+                                    mediaRecorderRef.current.stop();
+                                    setIsRecording(false);
+                                 } else {
+                                    try {
+                                       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                                       const recorder = new MediaRecorder(stream);
+                                       audioChunksRef.current = [];
+                                       recorder.ondataavailable = e => { if (e.data.size > 0) audioChunksRef.current.push(e.data); };
+                                       recorder.onstop = () => {
+                                          const blob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
+                                          const reader = new FileReader();
+                                          reader.readAsDataURL(blob);
+                                          reader.onloadend = async () => {
+                                             const audioData = reader.result as string;
+                                             try {
+                                                await fetch(`/api/chats/${chatSelectedId}/messages`, {
+                                                   method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ type: 'voice', audioData })
+                                                });
+                                             } catch (e) { console.error('Voice note send failed', e); }
+                                          };
+                                          stream.getTracks().forEach(t => t.stop());
+                                       };
+                                       recorder.start();
+                                       mediaRecorderRef.current = recorder;
+                                       setIsRecording(true);
+                                    } catch (e) {
+                                       alert('Microphone access required for voice notes.');
+                                    }
+                                 }
+                              }}
+                              className={`p-3.5 rounded-lg flex items-center justify-center transition-all ${isRecording ? 'bg-rose-500 text-white animate-pulse shadow-rose-500/30' : 'bg-[#F0F4F9] text-[#1F4E79] border border-[#D6E0EB] hover:bg-[#E3EAF2]'}`}
+                              title={isRecording ? "Stop Recording Voice Note" : "Send Voice Note"}
+                           >
+                              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M11 5L6 9H2v6h4l5 4V5zM15.54 8.46a5 5 0 010 7.07M19.07 4.93a10 10 0 010 14.14" /></svg>
+                           </button>
                            <button
                               onClick={handleSendMessage}
                               className="p-3.5 px-5 bg-[#1F4E79] text-white rounded-lg hover:bg-[#163A5C] transition-all shadow-sm"

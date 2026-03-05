@@ -177,7 +177,37 @@ router.post(
     }
 );
 
-// POST / — Legacy JSON-only upload report (can be AI report by patient or consultation by doctor)
+// POST / — General JSON-only upload report (e.g., AI report from PatientDashboard)
+router.post('/', protect, async (req, res) => {
+    try {
+        const reportData = req.body;
+        // ensure patientId or doctorId is set strictly based on auth context
+        if (req.user.role === 'patient') {
+            reportData.patientId = req.user.id;
+            reportData.uploadedBy = 'patient';
+        } else if (req.user.role === 'doctor') {
+            reportData.doctorId = req.user.id;
+            reportData.uploadedBy = 'doctor';
+        }
+
+        if (!reportData.fileUrl) {
+            reportData.fileUrl = reportData.fileData ? reportData.fileData.substring(0, 50) + '...' : 'virtual';
+        }
+        if (!reportData.mimeType) {
+            reportData.mimeType = 'application/pdf';
+        }
+        if (!reportData.extractionStatus) {
+            reportData.extractionStatus = 'done';
+        }
+
+        const report = new MedicalReport(reportData);
+        await report.save();
+        res.status(201).json({ success: true, report });
+    } catch (err) {
+        console.error('POST /api/reports error:', err);
+        res.status(500).json({ success: false, error: err.message });
+    }
+});
 
 // GET /patient — Patient views their own reports
 router.get('/patient', protect, requireRole('patient'), async (req, res) => {

@@ -88,7 +88,7 @@ const BodyScanner: React.FC<BodyScannerProps> = ({ onConfirm, onCancel, isDoctor
           </div>
 
           <div className="relative h-full w-full max-w-lg flex items-center justify-center">
-            <svg viewBox="0 0 100 100" className="w-full h-full drop-shadow-[0_0_40px_rgba(59,91,253,0.3)]">
+            <svg viewBox="-25 0 150 100" className="w-full h-full drop-shadow-[0_0_40px_rgba(59,91,253,0.3)]">
               {/* Refined Silhouette */}
               <path
                 d="M50,2 C54,2 57,5 57,9 C57,11 55,13 53,14 L53,16 C58,16 68,18 70,25 C72,32 72,45 70,55 C68,60 65,65 60,65 L57,65 L58,95 L50,98 L42,95 L43,65 L40,65 C35,65 32,60 30,55 C28,45 28,32 30,25 C32,18 42,16 47,16 L47,14 C45,13 43,11 43,9 C43,5 46,2 50,2"
@@ -127,13 +127,13 @@ const BodyScanner: React.FC<BodyScannerProps> = ({ onConfirm, onCancel, isDoctor
                     )}
                     {(selection || isHovered) && (
                       <foreignObject
-                        x={zone.cx + zone.r + 2}
+                        x={zone.cx >= 50 ? zone.cx + zone.r + 2 : zone.cx - 42 - zone.r}
                         y={zone.cy - 3}
-                        width="120"
-                        height="40"
-                        className="pointer-events-none animate-in fade-in slide-in-from-left-2 z-50"
+                        width="40"
+                        height="12"
+                        className={`pointer-events-none animate-in fade-in z-50 overflow-visible flex ${zone.cx >= 50 ? 'justify-start slide-in-from-left-2' : 'justify-end slide-in-from-right-2'}`}
                       >
-                        <div className="bg-white px-3 py-1.5 rounded-[8px] text-[10px] font-bold text-slate-900 uppercase tracking-wider shadow-xl inline-block border-l-4 border-blue-600">
+                        <div className={`bg-white px-1.5 py-0.5 rounded-[4px] text-[3px] font-bold text-slate-900 uppercase tracking-widest shadow-xl inline-block ${zone.cx >= 50 ? 'border-l-[1px]' : 'border-r-[1px]'} border-blue-600 whitespace-nowrap`}>
                           {zone.label}
                         </div>
                       </foreignObject>

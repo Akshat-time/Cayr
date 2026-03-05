@@ -36,7 +36,8 @@ router.get('/', async (req, res) => {
                         experienceYears: docProfile.experienceYears || 0,
                         clinicName: docProfile.clinicName || '',
                         consultationFee: docProfile.consultationFee || 0,
-                        bio: docProfile.bio || ''
+                        bio: docProfile.bio || '',
+                        profile: docProfile
                     };
                 }
             }
@@ -83,6 +84,8 @@ router.get('/me/profile', requireAuth, async (req, res) => {
                 clinicName: docProfile.clinicName || '',
                 consultationFee: docProfile.consultationFee || 0,
                 bio: docProfile.bio || '',
+                availableDays: docProfile.availableDays || [],
+                availableTimeSlots: docProfile.availableTimeSlots || [],
             } : {})
         });
     } catch (err) {
@@ -134,6 +137,8 @@ router.put('/me/profile', requireAuth, async (req, res) => {
             if (consultationFee !== undefined) doctorUpdate.consultationFee = Number(consultationFee) || 0;
             if (bio !== undefined) doctorUpdate.bio = bio;
             if (phone !== undefined) doctorUpdate.phone = phone;
+            if (req.body.availableDays !== undefined) doctorUpdate.availableDays = req.body.availableDays;
+            if (req.body.availableTimeSlots !== undefined) doctorUpdate.availableTimeSlots = req.body.availableTimeSlots;
 
             docProfile = await DoctorProfile.findOneAndUpdate(
                 { userId },
@@ -166,6 +171,8 @@ router.put('/me/profile', requireAuth, async (req, res) => {
                     clinicName: docProfile.clinicName || '',
                     consultationFee: docProfile.consultationFee || 0,
                     bio: docProfile.bio || '',
+                    availableDays: docProfile.availableDays || [],
+                    availableTimeSlots: docProfile.availableTimeSlots || [],
                 } : {})
             }
         });

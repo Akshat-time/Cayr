@@ -11,19 +11,80 @@ const PatientRegisterForm: React.FC<PatientRegisterFormProps> = ({ onBack, onSwi
     const { login } = useAuth();
     const navigate = useNavigate();
 
-    const [form, setForm] = useState({ name: '', email: '', password: '', phone: '' });
+    const [form, setForm] = useState({
+        name: '', email: '', password: '', phone: '',
+        dob: '',
+        addressDetails: { street: '', city: '', state: '', zip: '', country: 'India' }
+    });
     const [error, setError] = useState('');
     const [loading, setLoading] = useState(false);
+    const [isFetchingPin, setIsFetchingPin] = useState(false);
+    const [pinError, setPinError] = useState('');
 
-    const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-        setForm(prev => ({ ...prev, [e.target.name]: e.target.value }));
+    const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
+        const { name, value } = e.target;
+        if (name.includes('.')) {
+            const [parent, child] = name.split('.');
+            setForm(prev => ({
+                ...prev,
+                [parent]: { ...(prev as any)[parent], [child]: value }
+            }));
+        } else {
+            setForm(prev => ({ ...prev, [name]: value }));
+        }
         setError('');
     };
 
+    const runPincodeLookup = React.useCallback(async (pin: string, country: string) => {
+        if (!pin || pin.length < 4) return;
+        setPinError(''); setIsFetchingPin(true);
+        try {
+            let city = '', state = '';
+            if (country === 'India') {
+                const res = await fetch(`https://api.postalpincode.in/pincode/${pin}`);
+                const data = await res.json();
+                if (data[0]?.Status === 'Success') {
+                    const po = data[0].PostOffice?.[0];
+                    city = po?.District || '';
+                    state = po?.State || '';
+                } else { setPinError('PIN code not found for India.'); }
+            } else {
+                const MAP: Record<string, string> = {
+                    'United States': 'us', 'United Kingdom': 'gb', 'Canada': 'ca',
+                    'Australia': 'au', 'Germany': 'de', 'France': 'fr'
+                };
+                const cc = MAP[country];
+                if (!cc) { setPinError('Pincode lookup not available for this country.'); setIsFetchingPin(false); return; }
+                const res = await fetch(`https://api.zippopotam.us/${cc}/${pin}`);
+                if (!res.ok) { setPinError('Postal code not found.'); setIsFetchingPin(false); return; }
+                const data = await res.json();
+                city = data.places?.[0]?.['place name'] || '';
+                state = data.places?.[0]?.['state'] || '';
+            }
+            if (city || state) {
+                setForm(prev => ({
+                    ...prev,
+                    addressDetails: { ...prev.addressDetails, city, state }
+                }));
+            }
+        } catch {
+            setPinError('Lookup failed. Check your connection.');
+        } finally { setIsFetchingPin(false); }
+    }, []);
+
+    React.useEffect(() => {
+        const pin = form.addressDetails.zip.trim();
+        const country = form.addressDetails.country.trim();
+        if (pin.length < 4) return;
+        const timer = setTimeout(() => runPincodeLookup(pin, country), 700);
+        return () => clearTimeout(timer);
+    }, [form.addressDetails.zip, form.addressDetails.country, runPincodeLookup]);
+
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
-        if (!form.name.trim() || !form.email.trim() || !form.password) {
-            setError('Name, email and password are required.');
+        const { street, city, state, zip } = form.addressDetails;
+        if (!form.name.trim() || !form.email.trim() || !form.password || !form.dob || !street.trim() || !city.trim() || !state.trim() || !zip.trim()) {
+            setError('Please fill in all required fields.');
             return;
         }
         if (form.password.length < 6) {
@@ -42,7 +103,9 @@ const PatientRegisterForm: React.FC<PatientRegisterFormProps> = ({ onBack, onSwi
                     name: form.name.trim(),
                     email: form.email.trim().toLowerCase(),
                     password: form.password,
-                    phone: form.phone.trim() || undefined
+                    phone: form.phone.trim() || undefined,
+                    dob: form.dob,
+                    addressDetails: form.addressDetails
                 }),
             });
 
@@ -146,6 +209,64 @@ const PatientRegisterForm: React.FC<PatientRegisterFormProps> = ({ onBack, onSwi
                         onChange={handleChange}
                         className="w-full px-5 py-4 rounded-2xl bg-slate-50 border border-slate-200 focus:border-blue-500 focus:bg-white outline-none transition text-slate-800 text-sm font-semibold placeholder:text-slate-300"
                     />
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div className="space-y-1.5 sm:col-span-2">
+                        <label className="text-xs font-black uppercase tracking-widest text-slate-500">Date of Birth *</label>
+                        <input
+                            name="dob" type="date" required value={form.dob} onChange={handleChange}
+                            className="w-full px-5 py-4 rounded-2xl bg-slate-50 border border-slate-200 focus:border-blue-500 focus:bg-white outline-none transition text-slate-800 text-sm font-semibold"
+                        />
+                    </div>
+                    <div className="space-y-1.5 sm:col-span-2">
+                        <label className="text-xs font-black uppercase tracking-widest text-slate-500">Street Address *</label>
+                        <input
+                            name="addressDetails.street" type="text" required placeholder="123 Main St" value={form.addressDetails.street} onChange={handleChange}
+                            className="w-full px-5 py-4 rounded-2xl bg-slate-50 border border-slate-200 focus:border-blue-500 focus:bg-white outline-none transition text-slate-800 text-sm font-semibold"
+                        />
+                    </div>
+                    <div className="space-y-1.5">
+                        <label className="text-xs font-black uppercase tracking-widest text-slate-500">Country *</label>
+                        <select
+                            name="addressDetails.country" required value={form.addressDetails.country} onChange={handleChange}
+                            className="w-full px-5 py-4 rounded-2xl bg-slate-50 border border-slate-200 focus:border-blue-500 focus:bg-white outline-none transition text-slate-800 text-sm font-semibold"
+                        >
+                            <option value="India">India</option>
+                            <option value="United States">United States</option>
+                            <option value="United Kingdom">United Kingdom</option>
+                            <option value="Canada">Canada</option>
+                        </select>
+                    </div>
+                    <div className="space-y-1.5">
+                        <label className="text-xs font-black uppercase tracking-widest text-slate-500">PIN / Zip Code *</label>
+                        <div className="relative">
+                            <input
+                                name="addressDetails.zip" type="text" required placeholder="e.g. 400001" value={form.addressDetails.zip} onChange={handleChange}
+                                className="w-full px-5 py-4 rounded-2xl bg-slate-50 border border-slate-200 focus:border-blue-500 focus:bg-white outline-none transition text-slate-800 text-sm font-semibold pr-10"
+                            />
+                            {isFetchingPin && (
+                                <div className="absolute right-4 top-1/2 -translate-y-1/2">
+                                    <svg className="w-4 h-4 text-blue-500 animate-spin" fill="none" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" className="opacity-25" /><path fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" className="opacity-75" /></svg>
+                                </div>
+                            )}
+                        </div>
+                        {pinError && <p className="text-[10px] text-red-500 font-bold ml-1">{pinError}</p>}
+                    </div>
+                    <div className="space-y-1.5">
+                        <label className="text-xs font-black uppercase tracking-widest text-slate-500">State *</label>
+                        <input
+                            name="addressDetails.state" type="text" required placeholder="State" value={form.addressDetails.state} onChange={handleChange}
+                            className="w-full px-5 py-4 rounded-2xl bg-slate-50 border border-slate-200 focus:border-blue-500 focus:bg-white outline-none transition text-slate-800 text-sm font-semibold"
+                        />
+                    </div>
+                    <div className="space-y-1.5">
+                        <label className="text-xs font-black uppercase tracking-widest text-slate-500">City *</label>
+                        <input
+                            name="addressDetails.city" type="text" required placeholder="City" value={form.addressDetails.city} onChange={handleChange}
+                            className="w-full px-5 py-4 rounded-2xl bg-slate-50 border border-slate-200 focus:border-blue-500 focus:bg-white outline-none transition text-slate-800 text-sm font-semibold"
+                        />
+                    </div>
                 </div>
 
                 {/* Submit */}

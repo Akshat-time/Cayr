@@ -14,11 +14,15 @@ const MessageSchema = new mongoose.Schema({
     },
     text: {
         type: String,
-        required: true
+        default: ''
+    },
+    audioData: {
+        type: String,
+        default: null
     },
     type: {
         type: String,
-        enum: ['text', 'signal'],
+        enum: ['text', 'signal', 'voice'],
         default: 'text'
     },
     createdAt: {

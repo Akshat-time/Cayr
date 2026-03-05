@@ -14,6 +14,7 @@ const userSchema = new mongoose.Schema({
     dob: String,
     gender: String,
     address: String,
+    cayrId: { type: String, unique: true, sparse: true },
     // Extended profile fields
     profilePicture: { type: String, default: '' },   // base64 data-url
     addressDetails: {
