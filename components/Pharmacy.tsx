@@ -10,6 +10,7 @@ const MEDICINES = [
 ];
 
 const Pharmacy: React.FC = () => {
+    const [searchTerm, setSearchTerm] = useState('');
     const [cart, setCart] = useState<{ id: string, qty: number }[]>([]);
     const [isCheckout, setIsCheckout] = useState(false);
 
@@ -30,13 +31,29 @@ const Pharmacy: React.FC = () => {
 
     return (
         <div className="space-y-10 animate-in fade-in duration-500">
-            <div className="flex items-center gap-8 animate-in slide-in-from-left duration-700">
-                <img src="/pharmacy-removebg-preview.png" alt="Pharmacy" className="h-24 w-24 md:h-28 md:w-28 object-contain filter drop-shadow-2xl" />
-                <div>
-                    <h1 className="text-[32px] md:text-[40px] font-black text-[#1C2B39] tracking-tight leading-none uppercase">Pharmacy</h1>
-                    <p className="text-[14px] font-medium text-[#6B7C8F] mt-2 uppercase tracking-widest">Direct clinical supply chain active</p>
+            <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6 animate-in slide-in-from-left duration-700">
+                <div className="flex items-center gap-8">
+                    <img src="/pharmacy-removebg-preview.png" alt="Pharmacy" className="h-24 w-24 md:h-28 md:w-28 object-contain filter drop-shadow-2xl" />
+                    <div>
+                        <h1 className="text-[32px] md:text-[40px] font-black text-[#1C2B39] tracking-tight leading-none uppercase">Pharmacy</h1>
+                        <p className="text-[14px] font-medium text-[#6B7C8F] mt-2 uppercase tracking-widest">Direct clinical supply chain active</p>
+                    </div>
                 </div>
+
+                {!isCheckout && (
+                    <div className="relative w-full md:w-72">
+                        <span className="absolute inset-y-0 left-0 flex items-center pl-4 text-[#9FB3C8]">🔍</span>
+                        <input
+                            type="text"
+                            placeholder="Search medications..."
+                            value={searchTerm}
+                            onChange={(e) => setSearchTerm(e.target.value)}
+                            className="w-full pl-12 pr-6 py-3 bg-[#FFFFFF] border border-[#E3EAF2] rounded-[12px] text-[14px] font-medium text-[#1C2B39] outline-none focus:border-[#1F4E79] shadow-sm transition-colors"
+                        />
+                    </div>
+                )}
             </div>
+
             <div className="bg-white rounded-[20px] p-6 shadow-[0_10px_30px_rgba(0,0,0,0.15)] flex justify-between items-center border border-white/5">
                 <div className="flex items-center space-x-6">
                     <div className="w-14 h-14 bg-emerald-50 text-emerald-600 rounded-[14px] flex items-center justify-center text-3xl">💊</div>
@@ -66,22 +83,38 @@ const Pharmacy: React.FC = () => {
                 </div>
             ) : (
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                    {MEDICINES.map(med => (
-                        <div key={med.id} className="bg-white p-6 rounded-[20px] shadow-[0_10px_30px_rgba(0,0,0,0.15)] border border-slate-50 hover:border-emerald-200 transition-all group flex flex-col justify-between min-h-[320px]">
-                            <div>
-                                <div className="flex justify-between items-start mb-6">
-                                    <div className="w-12 h-12 bg-slate-50 rounded-[12px] flex items-center justify-center text-xl">💊</div>
-                                    <span className="text-[18px] font-bold text-emerald-600">${med.price}</span>
+                    {(() => {
+                        const filteredMedicines = MEDICINES.filter(m =>
+                            m.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                            m.description.toLowerCase().includes(searchTerm.toLowerCase())
+                        );
+
+                        if (filteredMedicines.length === 0) {
+                            return (
+                                <div className="col-span-full py-20 text-center">
+                                    <div className="w-20 h-20 bg-emerald-50 text-emerald-500 rounded-[14px] flex items-center justify-center text-4xl mx-auto mb-6">💊</div>
+                                    <h3 className="text-[18px] font-semibold text-[#1C2B39]">No medications match your search</h3>
                                 </div>
-                                <h3 className="text-[18px] font-bold text-slate-900 tracking-tight leading-tight">{med.name}</h3>
-                                <p className="text-[13px] font-bold text-slate-400 mt-1 mb-4">{med.dose}</p>
-                                <p className="text-[14px] font-medium text-slate-500 leading-relaxed line-clamp-2">{med.description}</p>
+                            );
+                        }
+
+                        return filteredMedicines.map(med => (
+                            <div key={med.id} className="bg-white p-6 rounded-[20px] shadow-[0_10px_30px_rgba(0,0,0,0.15)] border border-slate-50 hover:border-emerald-200 transition-all group flex flex-col justify-between min-h-[320px]">
+                                <div>
+                                    <div className="flex justify-between items-start mb-6">
+                                        <div className="w-12 h-12 bg-slate-50 rounded-[12px] flex items-center justify-center text-xl">💊</div>
+                                        <span className="text-[18px] font-bold text-emerald-600">${med.price.toFixed(2)}</span>
+                                    </div>
+                                    <h3 className="text-[18px] font-bold text-slate-900 tracking-tight leading-tight">{med.name}</h3>
+                                    <p className="text-[13px] font-bold text-slate-400 mt-1 mb-4">{med.dose}</p>
+                                    <p className="text-[14px] font-medium text-slate-500 leading-relaxed line-clamp-2">{med.description}</p>
+                                </div>
+                                <button onClick={() => addToCart(med.id)} className="w-full mt-8 py-4 bg-slate-50 text-slate-700 rounded-[14px] text-[13px] font-bold hover:bg-emerald-600 hover:text-white transition-all">
+                                    Add to Cart
+                                </button>
                             </div>
-                            <button onClick={() => addToCart(med.id)} className="w-full mt-8 py-4 bg-slate-50 text-slate-700 rounded-[14px] text-[13px] font-bold hover:bg-emerald-600 hover:text-white transition-all">
-                                Add to Cart
-                            </button>
-                        </div>
-                    ))}
+                        ));
+                    })()}
                 </div>
             )}
         </div>

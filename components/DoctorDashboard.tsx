@@ -69,13 +69,43 @@ const DoctorDashboard: React.FC<DoctorDashboardProps> = ({
    // Calendar state (dynamic - defaults to today)
    const today = new Date();
    const [calYear, setCalYear] = useState(today.getFullYear());
-   const [calMonth, setCalMonth] = useState(today.getMonth()); // 0-indexed
+   const [calMonth, setCalMonth] = useState(today.getMonth());
    const [selectedCalDate, setSelectedCalDate] = useState<number>(today.getDate());
 
    // Report History modal
    const [viewingHistoryFor, setViewingHistoryFor] = useState<PatientRecord | null>(null);
    const [patientIntakeReports, setPatientIntakeReports] = useState<any[]>([]);
    const [isLoadingHistory, setIsLoadingHistory] = useState(false);
+
+   // ── NEW: Appointment Detail Modal ──
+   const [viewingAppointment, setViewingAppointment] = useState<Appointment | null>(null);
+
+   // ── NEW: Appointment status filter ──
+   const [apptFilter, setApptFilter] = useState<'all' | 'confirmed' | 'pending' | 'completed' | 'cancelled'>('all');
+
+   // ── NEW: Patient search ──
+   const [patientSearch, setPatientSearch] = useState('');
+
+   // ── NEW: Notifications ──
+   const [notifOpen, setNotifOpen] = useState(false);
+   const [notifications, setNotifications] = useState([
+      { id: '1', title: 'New Appointment Request', body: 'A patient has requested an appointment.', time: '2 min ago', read: false },
+      { id: '2', title: 'Report Ready', body: 'AI intake report is available for review.', time: '15 min ago', read: false },
+      { id: '3', title: 'Message Received', body: 'You have a new message in clinical messaging.', time: '1 hr ago', read: true },
+   ]);
+
+   // ── NEW: System Preferences ──
+   const [prefs, setPrefs] = useState({
+      language: 'English',
+      timezone: 'Asia/Kolkata',
+      apptReminders: true,
+      newPatientReq: true,
+      msgNotifs: true,
+      reportAlerts: true,
+      autoRemind: false,
+      emailFreq: 'daily',
+      prefsSaved: false,
+   });
 
    // State for Chat view
    const [chatSelectedId, setChatSelectedId] = useState<string | null>(null);
@@ -380,13 +410,24 @@ const DoctorDashboard: React.FC<DoctorDashboardProps> = ({
       return (
          <div className="relative z-10 flex flex-col lg:flex-row gap-6 max-w-[1600px] mx-auto">
             <div className="flex-1 space-y-8">
-               <div className="flex items-center">
+               <div className="flex items-center justify-between">
                   <div>
                      <h1 className="text-[26px] font-semibold tracking-tight text-[#1C2B39]">
                         Welcome back, Dr. {user.name.replace(/^Dr\.?\s*/i, '').split(' ')[0]}
                      </h1>
                      <p className="text-[15px] text-[#5C6B7A] mt-1 font-normal">Your health overview is ready for review.</p>
                   </div>
+                  <button
+                     onClick={() => setNotifOpen(o => !o)}
+                     className="relative w-11 h-11 bg-[#FFFFFF] border border-[#E3EAF2] rounded-[12px] flex items-center justify-center shadow-sm hover:shadow-md hover:border-[#D6E0EB] transition-all"
+                  >
+                     <svg className="w-5 h-5 text-[#1F4E79]" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" /></svg>
+                     {notifications.filter(n => !n.read).length > 0 && (
+                        <span className="absolute -top-1.5 -right-1.5 w-5 h-5 bg-rose-500 text-white text-[10px] font-bold rounded-full flex items-center justify-center shadow-sm">
+                           {notifications.filter(n => !n.read).length}
+                        </span>
+                     )}
+                  </button>
                </div>
 
                {/* Dashboard Overview Cards */}
@@ -534,30 +575,72 @@ const DoctorDashboard: React.FC<DoctorDashboardProps> = ({
    };
 
    const renderAppointments = (viewName: string) => {
-      const displayAppointments = viewName === 'Requests'
+      const isRequests = viewName === 'Requests';
+      const baseList = isRequests
          ? appointments.filter(a => a.status === AppointmentStatus.PENDING)
-         : appointments.filter(a => a.status !== AppointmentStatus.PENDING);
+         : appointments;
+
+      const filterMap: Record<string, AppointmentStatus | null> = {
+         all: null,
+         confirmed: AppointmentStatus.CONFIRMED,
+         pending: AppointmentStatus.PENDING,
+         completed: AppointmentStatus.COMPLETED,
+         cancelled: AppointmentStatus.CANCELLED,
+      };
+
+      const displayAppointments = isRequests
+         ? baseList
+         : (apptFilter === 'all' ? baseList : baseList.filter(a => a.status === filterMap[apptFilter]));
+
+      const filterLabels = [
+         { key: 'all', label: 'All', count: baseList.length },
+         { key: 'confirmed', label: 'Confirmed', count: baseList.filter(a => a.status === AppointmentStatus.CONFIRMED).length },
+         { key: 'pending', label: 'Pending', count: baseList.filter(a => a.status === AppointmentStatus.PENDING).length },
+         { key: 'completed', label: 'Completed', count: baseList.filter(a => a.status === AppointmentStatus.COMPLETED).length },
+         { key: 'cancelled', label: 'Cancelled', count: baseList.filter(a => a.status === AppointmentStatus.CANCELLED).length },
+      ];
 
       return (
          <div className="space-y-6 animate-in fade-in duration-700">
             <h1 className="text-[26px] font-semibold text-[#1C2B39]">{viewName}</h1>
+
+            {!isRequests && (
+               <div className="flex gap-2 flex-wrap">
+                  {filterLabels.map(f => (
+                     <button
+                        key={f.key}
+                        onClick={() => setApptFilter(f.key as any)}
+                        className={`px-4 py-2 rounded-[10px] text-[12px] font-semibold transition-all flex items-center gap-2 border ${apptFilter === f.key ? 'bg-[#1F4E79] text-white border-[#1F4E79] shadow-sm' : 'bg-[#FFFFFF] text-[#6B7C8F] border-[#E3EAF2] hover:border-[#D6E0EB] hover:text-[#1C2B39]'}`}
+                     >
+                        {f.label}
+                        <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-bold ${apptFilter === f.key ? 'bg-white/20 text-white' : 'bg-[#F0F4F9] text-[#6B7C8F]'}`}>{f.count}</span>
+                     </button>
+                  ))}
+               </div>
+            )}
+
             <div className="bg-[#FFFFFF] border border-[#E3EAF2] p-8 rounded-[16px] shadow-[0_4px_14px_rgba(16,42,67,0.04)] divide-y divide-[#E3EAF2]">
                {displayAppointments.length === 0 ? (
-                  <p className="text-[12px] font-medium text-[#9FB3C8] uppercase tracking-wide text-center py-10">No {viewName.toLowerCase()} found</p>
+                  <p className="text-[12px] font-medium text-[#9FB3C8] uppercase tracking-wide text-center py-10">No appointments match this filter</p>
                ) : displayAppointments.map(appt => (
-                  <div key={appt.id} className="flex items-center justify-between py-5">
+                  <div
+                     key={appt.id}
+                     className="flex items-center justify-between py-5 cursor-pointer hover:bg-[#F8FAFC] -mx-4 px-4 rounded-lg transition-colors"
+                     onClick={() => setViewingAppointment(appt)}
+                  >
                      <div className="flex items-center gap-4">
                         <div className="w-11 h-11 rounded-full bg-[#EAF1F8] border border-[#D6E0EB] overflow-hidden"><img src={`https://api.dicebear.com/7.x/avataaars/svg?seed=${appt.patientName}`} alt="" className="w-full h-full object-cover" /></div>
                         <div><p className="font-semibold text-[#1C2B39]">{appt.patientName}</p><p className="text-[11px] font-medium text-[#6B7C8F] mt-0.5">{appt.date} &bull; {appt.time}</p></div>
                      </div>
-                     <div className="flex items-center gap-3">
-                        <span className={`px-3 py-1 rounded-md text-[10px] font-semibold uppercase ${appt.status === AppointmentStatus.PENDING ? 'bg-amber-50 text-amber-700 border border-amber-200' : 'bg-emerald-50 text-emerald-700 border border-emerald-200'}`}>{appt.status}</span>
+                     <div className="flex items-center gap-3" onClick={e => e.stopPropagation()}>
+                        <span className={`px-3 py-1 rounded-md text-[10px] font-semibold uppercase ${appt.status === AppointmentStatus.PENDING ? 'bg-amber-50 text-amber-700 border border-amber-200' : appt.status === AppointmentStatus.CANCELLED ? 'bg-rose-50 text-rose-700 border border-rose-200' : appt.status === AppointmentStatus.COMPLETED ? 'bg-blue-50 text-blue-700 border border-blue-200' : 'bg-emerald-50 text-emerald-700 border border-emerald-200'}`}>{appt.status}</span>
                         {appt.status === AppointmentStatus.PENDING && (
                            <div className="flex gap-2">
                               <button onClick={() => updateStatus(appt.id, AppointmentStatus.CANCELLED)} className="px-3 py-1.5 text-[#6B7C8F] font-semibold text-[11px] hover:text-rose-600 transition-colors">Reject</button>
                               <button onClick={() => updateStatus(appt.id, AppointmentStatus.CONFIRMED)} className="px-4 py-1.5 bg-[#1F4E79] text-[#FFFFFF] rounded-lg font-medium text-[12px] shadow-sm hover:bg-[#163A5C] transition-colors">Approve</button>
                            </div>
                         )}
+                        <svg className="w-4 h-4 text-[#D6E0EB]" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5l7 7-7 7" /></svg>
                      </div>
                   </div>
                ))}
@@ -572,35 +655,58 @@ const DoctorDashboard: React.FC<DoctorDashboardProps> = ({
             .filter(a => a.status === AppointmentStatus.CONFIRMED || a.status === AppointmentStatus.COMPLETED)
             .map(a => a.patientId)
       );
-      const filteredPatients = patients.filter(p => consultedPatientIds.has(p.id));
+      const allPatients = patients.filter(p => consultedPatientIds.has(p.id));
+      const filteredPatients = patientSearch.trim()
+         ? allPatients.filter(p => {
+            const q = patientSearch.toLowerCase();
+            return p.name.toLowerCase().includes(q) || p.id.toLowerCase().includes(q) || (p.phone || '').includes(q);
+         })
+         : allPatients;
 
       return (
-         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 animate-in fade-in">
-            {filteredPatients.map(p => (
-               <div key={p.id} className="bg-[#FFFFFF] border border-[#E3EAF2] p-6 rounded-[14px] shadow-[0_4px_14px_rgba(16,42,67,0.06)] hover:shadow-[0_8px_20px_rgba(16,42,67,0.08)] transition-all">
-                  <div className="flex items-center gap-4 mb-6">
-                     <div className="w-14 h-14 rounded-full bg-[#EAF1F8] overflow-hidden border border-[#D6E0EB]">
-                        <img src={`https://api.dicebear.com/7.x/avataaars/svg?seed=${p.name}`} alt="" className="w-full h-full object-cover" />
+         <div className="space-y-6 animate-in fade-in">
+            <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+               <h1 className="text-[26px] font-semibold text-[#1C2B39]">My Patients</h1>
+               <div className="relative w-full md:w-72">
+                  <span className="absolute inset-y-0 left-0 flex items-center pl-4 text-[#9FB3C8]">🔍</span>
+                  <input
+                     type="text"
+                     placeholder="Search by name, ID, or phone..."
+                     value={patientSearch}
+                     onChange={e => setPatientSearch(e.target.value)}
+                     className="w-full pl-12 pr-5 py-3 bg-[#FFFFFF] border border-[#E3EAF2] rounded-[12px] text-[13px] font-medium text-[#1C2B39] outline-none focus:border-[#1F4E79] shadow-sm transition-colors"
+                  />
+               </div>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+               {filteredPatients.map(p => (
+                  <div key={p.id} className="bg-[#FFFFFF] border border-[#E3EAF2] p-6 rounded-[14px] shadow-[0_4px_14px_rgba(16,42,67,0.06)] hover:shadow-[0_8px_20px_rgba(16,42,67,0.08)] transition-all">
+                     <div className="flex items-center gap-4 mb-6">
+                        <div className="w-14 h-14 rounded-full bg-[#EAF1F8] overflow-hidden border border-[#D6E0EB]">
+                           <img src={`https://api.dicebear.com/7.x/avataaars/svg?seed=${p.name}`} alt="" className="w-full h-full object-cover" />
+                        </div>
+                        <div>
+                           <h3 className="text-[16px] font-semibold text-[#1C2B39]">{p.name}</h3>
+                           <p className="text-[12px] font-medium text-[#6B7C8F] mt-0.5">{p.age}y &bull; {p.bloodType}</p>
+                           {p.phone && <p className="text-[11px] text-[#9FB3C8] mt-0.5">{p.phone}</p>}
+                        </div>
                      </div>
-                     <div>
-                        <h3 className="text-[16px] font-semibold text-[#1C2B39]">{p.name}</h3>
-                        <p className="text-[12px] font-medium text-[#6B7C8F] mt-0.5">{p.age}y &bull; {p.bloodType}</p>
+                     <div className="flex gap-2">
+                        <button onClick={() => { setSelectedPatientId(p.id); setLocalView('My Patients'); }} className="flex-1 py-2 bg-[#F0F4F9] border border-[#D6E0EB] text-[#1F4E79] rounded-lg font-medium text-[11px] hover:bg-[#E3EAF2] transition-colors">Profile</button>
+                        <button onClick={() => handleFetchPatientIntakeReports(p)} className="flex-1 py-2 bg-[#F0F4F9] border border-[#D6E0EB] text-[#1F4E79] rounded-lg font-medium text-[11px] hover:bg-[#E3EAF2] transition-colors">History</button>
+                        <button onClick={() => { setWritingReportFor(p); setMedicines([]); setReportData({ diagnosis: '', notes: '' }); setIsReportModalOpen(true); }} className="flex-1 py-2 bg-[#1F4E79] text-[#FFFFFF] rounded-lg font-medium text-[11px] shadow-sm hover:bg-[#163A5C] transition-colors">Report</button>
                      </div>
                   </div>
-                  <div className="flex gap-2">
-                     <button onClick={() => { setSelectedPatientId(p.id); setLocalView('My Patients'); }} className="flex-1 py-2 bg-[#F0F4F9] border border-[#D6E0EB] text-[#1F4E79] rounded-lg font-medium text-[11px] hover:bg-[#E3EAF2] transition-colors">Profile</button>
-                     <button onClick={() => handleFetchPatientIntakeReports(p)} className="flex-1 py-2 bg-[#F0F4F9] border border-[#D6E0EB] text-[#1F4E79] rounded-lg font-medium text-[11px] hover:bg-[#E3EAF2] transition-colors">History</button>
-                     <button onClick={() => { setWritingReportFor(p); setMedicines([]); setReportData({ diagnosis: '', notes: '' }); setIsReportModalOpen(true); }} className="flex-1 py-2 bg-[#1F4E79] text-[#FFFFFF] rounded-lg font-medium text-[11px] shadow-sm hover:bg-[#163A5C] transition-colors">Report</button>
+               ))}
+               {filteredPatients.length === 0 && (
+                  <div className="col-span-full py-20 text-center">
+                     <div className="w-20 h-20 bg-[#F4F7FB] rounded-[16px] text-3xl mx-auto flex items-center justify-center border border-[#D6E0EB] mb-4 grayscale opacity-50">👥</div>
+                     <p className="text-[16px] font-semibold text-[#1C2B39]">{patientSearch ? 'No results found' : 'No Patients Yet'}</p>
+                     <p className="text-[13px] font-medium text-[#6B7C8F] mt-1">{patientSearch ? 'Try a different name, ID, or phone number.' : 'Accept appointment requests to build your patient list.'}</p>
                   </div>
-               </div>
-            ))}
-            {filteredPatients.length === 0 && (
-               <div className="col-span-full py-20 text-center">
-                  <div className="w-20 h-20 bg-[#F4F7FB] rounded-[16px] text-3xl mx-auto flex items-center justify-center border border-[#D6E0EB] mb-4 grayscale opacity-50">👥</div>
-                  <p className="text-[16px] font-semibold text-[#1C2B39]">No Patients Yet</p>
-                  <p className="text-[13px] font-medium text-[#6B7C8F] mt-1">Accept appointment requests to build your patient list.</p>
-               </div>
-            )}
+               )}
+            </div>
          </div>
       );
    };
@@ -620,11 +726,162 @@ const DoctorDashboard: React.FC<DoctorDashboardProps> = ({
                <div className="space-y-2">{filteredPatients.map(p => (<button key={p.id} onClick={() => setSelectedPatientId(p.id)} className={`w-full p-3 rounded-lg text-left font-semibold text-[14px] transition-colors ${selectedPatientId === p.id ? 'bg-[#1F4E79] text-[#FFFFFF] shadow-sm' : 'text-[#5C6B7A] hover:bg-[#F4F7FB]'}`}>{p.name}</button>))}</div>
             </div>
             <div className="col-span-3 space-y-6">
+               {/* General Profile & Clinical Background Card */}
                <div className="bg-[#FFFFFF] border border-[#E3EAF2] p-10 rounded-[16px] shadow-[0_4px_14px_rgba(16,42,67,0.04)] text-[#1C2B39]">
-                  <h2 className="text-[26px] font-semibold mb-6">{activePatient?.name}</h2>
-                  <div className="grid grid-cols-2 gap-8">
-                     <div><h4 className="text-[13px] uppercase text-[#1F4E79] mb-4 font-semibold tracking-wide">History</h4><div className="space-y-4">{activePatient?.history?.map((h, i) => (<div key={i} className="flex gap-3"><div className="w-2 h-2 bg-[#1F4E79] rounded-full mt-1.5 shrink-0" /><p className="text-[14px] font-semibold">{h.condition} <span className="block text-[11px] text-[#6B7C8F] mt-0.5">{h.date}</span></p></div>))}</div></div>
-                     <div><h4 className="text-[13px] uppercase text-[#1F4E79] mb-4 font-semibold tracking-wide">Reports</h4><div className="space-y-3">{medicalReports.filter(r => r.patientId === activePatient?.id).map(r => (<div key={r.id} className="bg-[#F4F7FB] border border-[#E3EAF2] p-4 rounded-lg flex justify-between items-center"><span className="text-[12px] font-semibold text-[#1C2B39]">{r.title}</span><button onClick={() => handleDownloadReport(r.fileData, r.fileName)} className="text-[#1F4E79] hover:text-[#0F2A43] font-semibold text-[11px] uppercase tracking-wide transition-colors">Download</button></div>))}</div></div>
+                  <div className="flex items-center gap-6 mb-8 pb-8 border-b border-[#E3EAF2]">
+                     <div className="w-20 h-20 rounded-full border border-[#D6E0EB] bg-[#F4F7FB] overflow-hidden shrink-0">
+                        <img src={`https://api.dicebear.com/7.x/avataaars/svg?seed=${activePatient?.name}`} alt={activePatient?.name || ''} className="w-full h-full object-cover" />
+                     </div>
+                     <div>
+                        <h2 className="text-[26px] font-semibold text-[#1C2B39]">{activePatient?.name}</h2>
+                        <p className="text-[14px] text-[#6B7C8F] mt-1 font-medium">Patient ID: <span className="text-[#1C2B39]">{activePatient?.id}</span></p>
+                     </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-10 mb-8">
+                     {/* General Information */}
+                     <div>
+                        <h4 className="text-[14px] uppercase text-[#1F4E79] mb-5 font-semibold tracking-wide flex items-center gap-2">
+                           General Information
+                        </h4>
+                        <div className="space-y-4">
+                           <div className="flex justify-between items-center border-b border-[#F0F4F9] pb-3">
+                              <span className="text-[13px] text-[#6B7C8F] font-medium">Date of Birth</span>
+                              <span className="text-[14px] font-semibold text-[#1C2B39]">{activePatient?.dob || 'N/A'}</span>
+                           </div>
+                           <div className="flex justify-between items-center border-b border-[#F0F4F9] pb-3">
+                              <span className="text-[13px] text-[#6B7C8F] font-medium">Age</span>
+                              <span className="text-[14px] font-semibold text-[#1C2B39]">{activePatient?.age || 'N/A'}</span>
+                           </div>
+                           <div className="flex justify-between items-center border-b border-[#F0F4F9] pb-3">
+                              <span className="text-[13px] text-[#6B7C8F] font-medium">Gender</span>
+                              <span className="text-[14px] font-semibold text-[#1C2B39]">{activePatient?.gender || 'N/A'}</span>
+                           </div>
+                           <div className="flex justify-between items-center border-b border-[#F0F4F9] pb-3">
+                              <span className="text-[13px] text-[#6B7C8F] font-medium">Blood Type</span>
+                              <span className="text-[14px] font-semibold text-[#1C2B39]">{activePatient?.bloodType || 'N/A'}</span>
+                           </div>
+                           <div className="flex justify-between items-center pb-1">
+                              <span className="text-[13px] text-[#6B7C8F] font-medium">Contact</span>
+                              <span className="text-[14px] font-semibold text-[#1C2B39]">{activePatient?.phone || activePatient?.email || 'N/A'}</span>
+                           </div>
+                        </div>
+                     </div>
+
+                     {/* Clinical Background */}
+                     <div>
+                        <h4 className="text-[14px] uppercase text-[#1F4E79] mb-5 font-semibold tracking-wide flex items-center gap-2">
+                           Clinical Background
+                        </h4>
+                        <div className="space-y-4">
+                           <div className="flex justify-between items-center border-b border-[#F0F4F9] pb-3">
+                              <span className="text-[13px] text-[#6B7C8F] font-medium">Height</span>
+                              <span className="text-[14px] font-semibold text-[#1C2B39]">{activePatient?.height ? `${activePatient.height} cm` : 'N/A'}</span>
+                           </div>
+                           <div className="flex justify-between items-center border-b border-[#F0F4F9] pb-3">
+                              <span className="text-[13px] text-[#6B7C8F] font-medium">Weight</span>
+                              <span className="text-[14px] font-semibold text-[#1C2B39]">{activePatient?.weight ? `${activePatient.weight} kg` : 'N/A'}</span>
+                           </div>
+                           <div className="flex flex-col gap-2 pt-2 border-b border-[#F0F4F9] pb-3">
+                              <span className="text-[13px] text-[#6B7C8F] font-medium">Allergies</span>
+                              <div className="flex flex-wrap gap-2">
+                                 {activePatient?.allergies && activePatient.allergies.length > 0 ? (
+                                    activePatient.allergies.map((allergy, i) => (
+                                       <span key={i} className="px-2.5 py-1 bg-red-50 text-red-600 border border-red-100 rounded-md text-[11px] font-semibold tracking-wide">{allergy}</span>
+                                    ))
+                                 ) : (
+                                    <span className="text-[14px] font-semibold text-[#1C2B39]">No known allergies</span>
+                                 )}
+                              </div>
+                           </div>
+                           <div className="flex flex-col gap-2 pt-2 pb-1">
+                              <span className="text-[13px] text-[#6B7C8F] font-medium">Current Medications</span>
+                              <div className="flex flex-wrap gap-2">
+                                 {activePatient?.currentMedications && activePatient.currentMedications.length > 0 ? (
+                                    activePatient.currentMedications.map((med, i) => (
+                                       <span key={i} className="px-2.5 py-1 bg-[#F4F7FB] text-[#1F4E79] border border-[#E3EAF2] rounded-md text-[11px] font-semibold tracking-wide">{med}</span>
+                                    ))
+                                 ) : (
+                                    <span className="text-[14px] font-semibold text-[#1C2B39]">None</span>
+                                 )}
+                              </div>
+                           </div>
+                        </div>
+                     </div>
+                  </div>
+
+                  {/* Medical History & Reports (Moved below General Information and Clinical Background) */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pt-8 border-t border-[#E3EAF2]">
+                     {/* History */}
+                     <div className="bg-[#FFFFFF] rounded-[16px] text-[#1C2B39]">
+                        <h4 className="text-[14px] uppercase text-[#1F4E79] mb-5 font-semibold tracking-wide flex items-center gap-2">Medical History</h4>
+                        <div className="space-y-4">
+                           {activePatient?.history && activePatient.history.length > 0 ? (
+                              activePatient.history.map((h, i) => (
+                                 <div key={i} className="flex gap-4 p-4 rounded-xl border border-[#F0F4F9] hover:border-[#E3EAF2] hover:bg-[#F8FAFC] transition-colors">
+                                    <div className="w-10 h-10 rounded-full bg-[#EAF1F8] text-[#1F4E79] flex items-center justify-center shrink-0">
+                                       <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
+                                    </div>
+                                    <div>
+                                       <p className="text-[14px] font-semibold text-[#1C2B39]">{h.condition}</p>
+                                       <div className="flex items-center gap-3 mt-1.5">
+                                          <span className="text-[12px] font-medium text-[#6B7C8F] flex items-center gap-1.5">
+                                             <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
+                                             {h.date}
+                                          </span>
+                                       </div>
+                                    </div>
+                                 </div>
+                              ))
+                           ) : (
+                              <p className="text-[13px] text-[#6B7C8F] font-medium text-center py-6">No medical history available</p>
+                           )}
+                        </div>
+                     </div>
+
+                     {/* Reports */}
+                     <div className="bg-[#FFFFFF] rounded-[16px] text-[#1C2B39] flex flex-col pl-4 border-l border-[#E3EAF2]">
+                        <div className="flex items-center justify-between mb-5">
+                           <h4 className="text-[14px] uppercase text-[#1F4E79] font-semibold tracking-wide flex items-center gap-2">
+                              Available Reports
+                              <span className="ml-2 w-5 h-5 rounded-full bg-[#E8F1FA] text-[#1F4E79] flex items-center justify-center text-[10px] font-bold">
+                                 {medicalReports.filter(r => r.patientId === activePatient?.id).length}
+                              </span>
+                           </h4>
+                        </div>
+
+                        <div className="space-y-3 flex-1 max-h-[400px]">
+                           {(() => {
+                              const patientReports = medicalReports.filter(r => r.patientId === activePatient?.id);
+                              if (patientReports.length === 0) {
+                                 return <p className="text-[13px] text-[#6B7C8F] font-medium text-center py-6">No clinical verification notes or AI Scribe sessions found</p>;
+                              }
+
+                              return patientReports.map(r => (
+                                 <div key={r.id} className="bg-[#FFFFFF] border border-[#E3EAF2] p-4 rounded-xl flex justify-between items-center hover:bg-[#F4F7FB] transition-colors cursor-pointer" onClick={() => r.fileData && handleDownloadReport(r.fileData, r.fileName || 'report.pdf')}>
+                                    <div className="flex items-center gap-3">
+                                       <div className={`p-2.5 rounded-lg ${r.type?.toLowerCase().includes('intake') || r.reportType === 'ai_intake' ? 'bg-[#F0EDFE] text-[#6328E0]' : 'bg-[#E8F1FA] text-[#1F4E79]'}`}>
+                                          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                                          </svg>
+                                       </div>
+                                       <div>
+                                          <p className="text-[13px] font-semibold text-[#1C2B39]">
+                                             {r.title || r.type || r.reportType || 'Medical Report'}
+                                          </p>
+                                          <p className="text-[11px] text-[#6B7C8F] font-medium mt-0.5">
+                                             {new Date(r.date || Date.now()).toLocaleDateString()}{r.reportType === 'ai_intake' ? ' • AI Pre-Assessment' : ' • Doctor Consultation'}
+                                          </p>
+                                       </div>
+                                    </div>
+                                    <button className="p-2 text-[#1F4E79] transition-transform hover:scale-110" title="Download Report">
+                                       <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg>
+                                    </button>
+                                 </div>
+                              ));
+                           })()}
+                        </div>
+                     </div>
                   </div>
                </div>
             </div>
@@ -860,11 +1117,144 @@ const DoctorDashboard: React.FC<DoctorDashboardProps> = ({
    };
 
    const renderSettings = () => (
-      <div className="space-y-6 animate-in fade-in duration-700 text-[#1C2B39]">
-         <div><h1 className="text-[26px] font-semibold">Settings</h1><p className="text-[13px] font-medium mt-1 text-[#6B7C8F]">Account & Preference Controls</p></div>
-         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div className="bg-[#FFFFFF] border border-[#E3EAF2] p-8 rounded-[16px] shadow-[0_4px_14px_rgba(16,42,67,0.04)] space-y-5"><h3 className="text-[16px] font-semibold">System Preferences</h3></div>
-            <div className="bg-[#FFFFFF] border border-[#E3EAF2] p-8 rounded-[16px] shadow-[0_4px_14px_rgba(16,42,67,0.04)] space-y-5"><h3 className="text-[16px] font-semibold">Security</h3><button className="w-full py-3 bg-[#1F4E79] text-[#FFFFFF] rounded-lg text-[14px] font-medium hover:bg-[#163A5C] transition-colors">Change Password</button></div>
+      <div className="space-y-10 animate-in fade-in duration-700 text-[#1C2B39]">
+         <div className="flex items-center gap-6 animate-in slide-in-from-left duration-700">
+            <div className="w-16 h-16 bg-[#FFFFFF] rounded-[12px] flex items-center justify-center text-3xl shadow-sm border border-[#E3EAF2]">⚙️</div>
+            <div>
+               <h1 className="text-[28px] font-semibold text-[#1C2B39] tracking-tight leading-none">Settings</h1>
+               <p className="text-[14px] font-medium text-[#6B7C8F] mt-1 tracking-wide">Manage your account preferences and security</p>
+            </div>
+         </div>
+
+         <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+            {/* Profile Settings */}
+            <div className="bg-[#FFFFFF] border border-[#E3EAF2] rounded-[16px] p-8 shadow-[0_8px_30px_rgba(15,42,67,0.12)] space-y-6">
+               <h3 className="text-[18px] font-semibold text-[#1C2B39] flex items-center gap-2">
+                  <span className="w-8 h-8 rounded-lg bg-[#E8F1FA] text-[#1F4E79] flex items-center justify-center text-[14px]">👤</span>
+                  Profile Settings
+               </h3>
+               <div className="space-y-4">
+                  <div>
+                     <label className="text-[12px] font-semibold uppercase tracking-wide text-[#6B7C8F] mb-1.5 block">Full Name</label>
+                     <input type="text" defaultValue={user.name} className="w-full p-3.5 bg-[#F4F7FB] border border-[#D6E0EB] rounded-[10px] text-[14px] font-medium text-[#1C2B39] outline-none focus:bg-[#FFFFFF] focus:border-[#1F4E79] transition-colors" />
+                  </div>
+                  <div>
+                     <label className="text-[12px] font-semibold uppercase tracking-wide text-[#6B7C8F] mb-1.5 block">Email Address</label>
+                     <input type="email" defaultValue={user.email} className="w-full p-3.5 bg-[#F4F7FB] border border-[#D6E0EB] rounded-[10px] text-[14px] font-medium text-[#1C2B39] outline-none focus:bg-[#FFFFFF] focus:border-[#1F4E79] transition-colors" />
+                  </div>
+                  <div>
+                     <label className="text-[12px] font-semibold uppercase tracking-wide text-[#6B7C8F] mb-1.5 block">Specialty</label>
+                     <input type="text" defaultValue={user.profile?.specialization || 'General Practice'} className="w-full p-3.5 bg-[#F4F7FB] border border-[#D6E0EB] rounded-[10px] text-[14px] font-medium text-[#1C2B39] outline-none focus:bg-[#FFFFFF] focus:border-[#1F4E79] transition-colors" />
+                  </div>
+                  <button className="w-full py-4 bg-[#1F4E79] text-[#FFFFFF] rounded-[10px] font-semibold text-[14px] shadow-sm hover:bg-[#163A5C] transition-colors mt-2">
+                     Save Profile Changes
+                  </button>
+               </div>
+            </div>
+
+            {/* Notification & Security */}
+            <div className="space-y-6">
+               {/* Notification Preferences */}
+               <div className="bg-[#FFFFFF] border border-[#E3EAF2] rounded-[16px] p-8 shadow-[0_8px_30px_rgba(15,42,67,0.12)] space-y-4">
+                  <h3 className="text-[18px] font-semibold text-[#1C2B39] flex items-center gap-2">
+                     <span className="w-8 h-8 rounded-lg bg-[#E8F1FA] text-[#1F4E79] flex items-center justify-center text-[14px]">🔔</span>
+                     Notification Preferences
+                  </h3>
+                  {([
+                     { key: 'apptReminders', title: 'Appointment Reminders', desc: 'Get reminded before upcoming appointments' },
+                     { key: 'newPatientReq', title: 'New Patient Requests', desc: 'Alert when patients request an appointment' },
+                     { key: 'msgNotifs', title: 'Message Notifications', desc: 'Notify on new chat messages' },
+                     { key: 'reportAlerts', title: 'Report Generation Alerts', desc: 'Alert when AI reports are ready' },
+                  ] as { key: keyof typeof prefs; title: string; desc: string }[]).map(item => (
+                     <div key={item.key} className="flex flex-row items-center justify-between p-4 border border-[#E3EAF2] rounded-[10px] hover:border-[#D6E0EB] transition-colors">
+                        <div>
+                           <p className="font-semibold text-[#1C2B39] text-[14px]">{item.title}</p>
+                           <p className="text-[12px] text-[#6B7C8F] mt-0.5">{item.desc}</p>
+                        </div>
+                        <label className="relative inline-flex items-center cursor-pointer">
+                           <input type="checkbox" className="sr-only peer" checked={!!prefs[item.key]} onChange={e => setPrefs(p => ({ ...p, [item.key]: e.target.checked, prefsSaved: false }))} />
+                           <div className="w-11 h-6 bg-[#D6E0EB] rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-[#10B981]"></div>
+                        </label>
+                     </div>
+                  ))}
+               </div>
+
+               {/* Security */}
+               <div className="bg-[#FFFFFF] border border-[#E3EAF2] rounded-[16px] p-8 shadow-[0_8px_30px_rgba(15,42,67,0.12)] space-y-4">
+                  <h3 className="text-[18px] font-semibold text-[#1C2B39] flex items-center gap-2">
+                     <span className="w-8 h-8 rounded-lg bg-[#E8F1FA] text-[#1F4E79] flex items-center justify-center text-[14px]">🔒</span>
+                     Security
+                  </h3>
+                  <button className="w-full py-4 bg-[#F4F7FB] border border-[#D6E0EB] text-[#1F4E79] rounded-[10px] font-semibold text-[14px] hover:bg-[#E3EAF2] transition-colors text-left px-5 flex justify-between items-center">
+                     Change Password<span className="text-[16px]">→</span>
+                  </button>
+                  <button className="w-full py-4 bg-[#F4F7FB] border border-[#D6E0EB] text-[#1F4E79] rounded-[10px] font-semibold text-[14px] hover:bg-[#E3EAF2] transition-colors text-left px-5 flex justify-between items-center">
+                     Two-Factor Authentication<span className="text-[11px] bg-[#10B981] text-white px-2 py-0.5 rounded-full uppercase tracking-wide">Enabled</span>
+                  </button>
+               </div>
+            </div>
+         </div>
+
+         {/* System Preferences */}
+         <div className="bg-[#FFFFFF] border border-[#E3EAF2] rounded-[16px] p-8 shadow-[0_8px_30px_rgba(15,42,67,0.12)]">
+            <h3 className="text-[18px] font-semibold text-[#1C2B39] flex items-center gap-2 mb-6">
+               <span className="w-8 h-8 rounded-lg bg-[#E8F1FA] text-[#1F4E79] flex items-center justify-center text-[14px]">🌐</span>
+               System Preferences
+            </h3>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+               <div>
+                  <label className="text-[12px] font-semibold uppercase tracking-wide text-[#6B7C8F] mb-1.5 block">Language Preference</label>
+                  <select value={prefs.language} onChange={e => setPrefs(p => ({ ...p, language: e.target.value, prefsSaved: false }))} className="w-full p-3.5 bg-[#F4F7FB] border border-[#D6E0EB] rounded-[10px] text-[14px] font-medium text-[#1C2B39] outline-none focus:bg-[#FFFFFF] focus:border-[#1F4E79] transition-colors">
+                     {['English', 'Hindi', 'Spanish', 'French', 'Tamil', 'Telugu', 'Bengali'].map(l => <option key={l}>{l}</option>)}
+                  </select>
+               </div>
+               <div>
+                  <label className="text-[12px] font-semibold uppercase tracking-wide text-[#6B7C8F] mb-1.5 block">Time Zone</label>
+                  <select value={prefs.timezone} onChange={e => setPrefs(p => ({ ...p, timezone: e.target.value, prefsSaved: false }))} className="w-full p-3.5 bg-[#F4F7FB] border border-[#D6E0EB] rounded-[10px] text-[14px] font-medium text-[#1C2B39] outline-none focus:bg-[#FFFFFF] focus:border-[#1F4E79] transition-colors">
+                     {['Asia/Kolkata', 'UTC', 'America/New_York', 'America/Los_Angeles', 'Europe/London', 'Europe/Paris'].map(tz => <option key={tz}>{tz}</option>)}
+                  </select>
+               </div>
+               <div>
+                  <label className="text-[12px] font-semibold uppercase tracking-wide text-[#6B7C8F] mb-1.5 block">Email Notification Frequency</label>
+                  <select value={prefs.emailFreq} onChange={e => setPrefs(p => ({ ...p, emailFreq: e.target.value, prefsSaved: false }))} className="w-full p-3.5 bg-[#F4F7FB] border border-[#D6E0EB] rounded-[10px] text-[14px] font-medium text-[#1C2B39] outline-none focus:bg-[#FFFFFF] focus:border-[#1F4E79] transition-colors">
+                     <option value="realtime">Real-time</option>
+                     <option value="daily">Daily Digest</option>
+                     <option value="weekly">Weekly Summary</option>
+                     <option value="never">Never</option>
+                  </select>
+               </div>
+               <div>
+                  <label className="text-[12px] font-semibold uppercase tracking-wide text-[#6B7C8F] mb-1.5 block">Theme</label>
+                  <button onClick={toggleDark} className="w-full p-3.5 bg-[#F4F7FB] border border-[#D6E0EB] rounded-[10px] text-[14px] font-medium text-[#1C2B39] hover:bg-[#E3EAF2] transition-colors text-left flex justify-between items-center">
+                     {darkMode ? '🌙 Dark Mode' : '☀️ Light Mode'}
+                     <span className="text-[11px] font-semibold text-[#6B7C8F]">Click to toggle</span>
+                  </button>
+               </div>
+               <div className="flex flex-row items-center justify-between p-4 border border-[#E3EAF2] rounded-[10px] hover:border-[#D6E0EB] transition-colors md:col-span-2">
+                  <div>
+                     <p className="font-semibold text-[#1C2B39] text-[14px]">Appointment Auto-Remind</p>
+                     <p className="text-[12px] text-[#6B7C8F] mt-0.5">Automatically send reminders 24h before appointments</p>
+                  </div>
+                  <label className="relative inline-flex items-center cursor-pointer">
+                     <input type="checkbox" className="sr-only peer" checked={prefs.autoRemind} onChange={e => setPrefs(p => ({ ...p, autoRemind: e.target.checked, prefsSaved: false }))} />
+                     <div className="w-11 h-6 bg-[#D6E0EB] rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-[#10B981]"></div>
+                  </label>
+               </div>
+            </div>
+            <div className="mt-6 flex items-center gap-4">
+               <button
+                  onClick={() => setPrefs(p => ({ ...p, prefsSaved: true }))}
+                  className="px-8 py-3.5 bg-[#1F4E79] text-white rounded-[10px] font-semibold text-[14px] shadow-sm hover:bg-[#163A5C] transition-colors"
+               >
+                  Save Preferences
+               </button>
+               {prefs.prefsSaved && (
+                  <span className="flex items-center gap-2 text-[13px] font-semibold text-emerald-600 animate-in fade-in">
+                     <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M5 13l4 4L19 7" /></svg>
+                     Preferences saved!
+                  </span>
+               )}
+            </div>
          </div>
       </div>
    );
@@ -887,6 +1277,91 @@ const DoctorDashboard: React.FC<DoctorDashboardProps> = ({
             {localView === 'Doctors' && (
                <div className={`p-20 text-center font-black uppercase text-[10px] tracking-[0.3em] ${T.textMuted} ${T.card} rounded-[40px] border ${T.cardBorder}`}>Network Node Module • Active</div>
             )}
+            {/* ── Notification Dropdown ── */}
+            {notifOpen && (
+               <div className="fixed inset-0 z-[150]" onClick={() => setNotifOpen(false)}>
+                  <div className="absolute top-20 right-8 w-96 bg-white rounded-[16px] shadow-[0_10px_40px_rgba(15,42,67,0.15)] border border-[#E3EAF2] overflow-hidden" onClick={e => e.stopPropagation()}>
+                     <div className="flex items-center justify-between px-6 py-4 border-b border-[#E3EAF2]">
+                        <h3 className="text-[16px] font-semibold text-[#1C2B39]">Notifications</h3>
+                        <button onClick={() => { setNotifications(n => n.map(x => ({ ...x, read: true }))); }} className="text-[12px] font-semibold text-[#1F4E79] hover:underline">Mark all read</button>
+                     </div>
+                     <div className="max-h-80 overflow-y-auto divide-y divide-[#F0F4F9]">
+                        {notifications.map(n => (
+                           <div key={n.id} className={`px-6 py-4 flex gap-3 hover:bg-[#F8FAFC] transition-colors ${!n.read ? 'bg-[#F0F6FF]' : ''}`}>
+                              <div className={`w-2 h-2 rounded-full mt-2 shrink-0 ${n.read ? 'bg-[#D6E0EB]' : 'bg-[#1F4E79]'}`} />
+                              <div className="flex-1 min-w-0">
+                                 <p className="text-[13px] font-semibold text-[#1C2B39]">{n.title}</p>
+                                 <p className="text-[12px] text-[#6B7C8F] mt-0.5">{n.body}</p>
+                                 <p className="text-[11px] text-[#9FB3C8] mt-1">{n.time}</p>
+                              </div>
+                              <button onClick={() => setNotifications(prev => prev.filter(x => x.id !== n.id))} className="text-[#9FB3C8] hover:text-rose-400 text-[18px] leading-none mt-0.5">✕</button>
+                           </div>
+                        ))}
+                        {notifications.length === 0 && (
+                           <div className="py-12 text-center text-[#9FB3C8] text-[13px] font-medium">All caught up! 🎉</div>
+                        )}
+                     </div>
+                  </div>
+               </div>
+            )}
+
+            {/* ── Appointment Detail Modal ── */}
+            {viewingAppointment && (() => {
+               const appt = viewingAppointment;
+               const patientRecord = patients.find(p => p.id === appt.patientId);
+               return (
+                  <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+                     <div className="absolute inset-0 bg-[#0F2A43]/40 backdrop-blur-sm" onClick={() => setViewingAppointment(null)} />
+                     <div className="bg-[#FFFFFF] relative w-full max-w-lg rounded-[20px] shadow-[0_8px_40px_rgba(15,42,67,0.18)] border border-[#E3EAF2] overflow-hidden">
+                        {/* Modal header */}
+                        <div className="flex items-center gap-4 p-6 border-b border-[#E3EAF2]">
+                           <div className="w-14 h-14 rounded-full bg-[#EAF1F8] border border-[#D6E0EB] overflow-hidden shrink-0">
+                              <img src={`https://api.dicebear.com/7.x/avataaars/svg?seed=${appt.patientName}`} alt="" className="w-full h-full object-cover" />
+                           </div>
+                           <div className="flex-1">
+                              <h2 className="text-[20px] font-semibold text-[#1C2B39]">{appt.patientName}</h2>
+                              <span className={`inline-block mt-1 px-3 py-0.5 rounded-full text-[11px] font-semibold uppercase ${appt.status === AppointmentStatus.PENDING ? 'bg-amber-50 text-amber-700 border border-amber-200' : appt.status === AppointmentStatus.CANCELLED ? 'bg-rose-50 text-rose-600 border border-rose-200' : appt.status === AppointmentStatus.COMPLETED ? 'bg-blue-50 text-blue-700 border border-blue-200' : 'bg-emerald-50 text-emerald-700 border border-emerald-200'}`}>{appt.status}</span>
+                           </div>
+                           <button onClick={() => setViewingAppointment(null)} className="w-8 h-8 rounded-lg bg-[#F4F7FB] border border-[#E3EAF2] flex items-center justify-center text-[#6B7C8F] hover:bg-[#E3EAF2] transition-colors">✕</button>
+                        </div>
+
+                        {/* Detail rows */}
+                        <div className="p-6 space-y-4">
+                           {[
+                              { label: 'Date', value: appt.date },
+                              { label: 'Time', value: appt.time },
+                              { label: 'Type', value: appt.type || 'General Consultation' },
+                              { label: 'Patient Contact', value: patientRecord?.phone || patientRecord?.email || 'Not available' },
+                              { label: 'Notes', value: appt.notes || 'No notes provided.' },
+                           ].map(row => (
+                              <div key={row.label} className="flex justify-between items-start gap-4 border-b border-[#F0F4F9] pb-3 last:border-0 last:pb-0">
+                                 <span className="text-[12px] font-semibold uppercase tracking-wide text-[#9FB3C8] shrink-0">{row.label}</span>
+                                 <span className="text-[14px] font-medium text-[#1C2B39] text-right">{row.value}</span>
+                              </div>
+                           ))}
+                        </div>
+
+                        {/* Actions */}
+                        <div className="p-6 pt-0 grid grid-cols-3 gap-3">
+                           <button
+                              onClick={() => { updateStatus(appt.id, AppointmentStatus.CANCELLED); setViewingAppointment(null); }}
+                              disabled={appt.status === AppointmentStatus.CANCELLED || appt.status === AppointmentStatus.COMPLETED}
+                              className="py-3 text-[12px] font-semibold rounded-[10px] bg-rose-50 text-rose-600 border border-rose-200 hover:bg-rose-100 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                           >Cancel</button>
+                           <button
+                              className="py-3 text-[12px] font-semibold rounded-[10px] bg-[#F4F7FB] text-[#1F4E79] border border-[#D6E0EB] hover:bg-[#E3EAF2] transition-colors"
+                           >Reschedule</button>
+                           <button
+                              onClick={() => { updateStatus(appt.id, AppointmentStatus.COMPLETED); setViewingAppointment(prev => prev ? { ...prev, status: AppointmentStatus.COMPLETED } : null); }}
+                              disabled={appt.status === AppointmentStatus.COMPLETED || appt.status === AppointmentStatus.CANCELLED}
+                              className="py-3 text-[12px] font-semibold rounded-[10px] bg-[#1F4E79] text-white hover:bg-[#163A5C] transition-colors shadow-sm disabled:opacity-40 disabled:cursor-not-allowed"
+                           >Mark Completed</button>
+                        </div>
+                     </div>
+                  </div>
+               );
+            })()}
+
             {/* ── Report History Modal ── */}
             {viewingHistoryFor && (
                <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">

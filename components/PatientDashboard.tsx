@@ -62,9 +62,17 @@ const PatientDashboard: React.FC<PatientDashboardProps> = ({
   const [paymentAmount, setPaymentAmount] = useState<number>(0);
   const [paymentDoctorName, setPaymentDoctorName] = useState<string>('');
 
+  // Education Modal
+  const [educationModalContent, setEducationModalContent] = useState<{ title: string, content: string } | null>(null);
+
   // State for Doctors view
   const [doctorsSearchTerm, setDoctorsSearchTerm] = useState('');
   const [doctorsPincodeTerm, setDoctorsPincodeTerm] = useState('');
+  const [remoteDoctors, setRemoteDoctors] = useState<User[]>([]);
+
+  // State for Reports view
+  const [reportsSearchTerm, setReportsSearchTerm] = useState('');
+  const [remoteReports, setRemoteReports] = useState<MedicalReport[] | null>(null);
 
   // State for Chat view
   const [chatSelectedId, setChatSelectedId] = useState<string | null>(null);
@@ -109,6 +117,46 @@ const PatientDashboard: React.FC<PatientDashboardProps> = ({
       .then(d => { if (d.intake) setIntakeData(d.intake); })
       .catch(() => null);
   }, []);
+
+  // Fetch doctors dynamically with search parameters
+  useEffect(() => {
+    if (activeTab === 'doctors' || activeTab === 'booking') {
+      const queryParams = new URLSearchParams({ role: 'doctor' });
+      if (doctorsSearchTerm) {
+        queryParams.append('search', doctorsSearchTerm);
+      }
+
+      fetch(`/api/users?${queryParams.toString()}`, { credentials: 'include' })
+        .then(r => r.json())
+        .then(data => {
+          if (Array.isArray(data)) {
+            setRemoteDoctors(data);
+          }
+        })
+        .catch(console.error);
+    }
+  }, [activeTab, doctorsSearchTerm]);
+
+  // Fetch reports dynamically with search parameters
+  useEffect(() => {
+    if (activeTab === 'reports') {
+      const queryParams = new URLSearchParams();
+      if (reportsSearchTerm) {
+        queryParams.append('search', reportsSearchTerm);
+
+        fetch(`/api/reports/patient?${queryParams.toString()}`, { credentials: 'include' })
+          .then(r => r.json())
+          .then(data => {
+            if (Array.isArray(data)) {
+              setRemoteReports(data.map((r: any) => ({ ...r, id: r._id })));
+            }
+          })
+          .catch(console.error);
+      } else {
+        setRemoteReports(null);
+      }
+    }
+  }, [activeTab, reportsSearchTerm]);
 
   const handleTabChange = (tab: any) => {
     setActiveTab(tab);
@@ -424,13 +472,13 @@ const PatientDashboard: React.FC<PatientDashboardProps> = ({
             </div>
 
             {appointments.filter(a => a.status === AppointmentStatus.CONFIRMED).slice(0, 1).map(apt => {
-              const doc = doctors.find(d => d.id === apt.doctorId);
+              const doc = remoteDoctors.length > 0 ? remoteDoctors.find(d => d.id === apt.doctorId) : doctors.find(d => d.id === apt.doctorId);
               return (
                 <div key={apt.id} className="p-4 bg-[#F4F7FB] rounded-[12px] border border-[#E3EAF2] mb-5 group/item hover:bg-[#FFFFFF] transition-colors">
                   <div className="flex items-center gap-4">
                     <div className="w-12 h-12 rounded-[10px] overflow-hidden border border-[#D6E0EB]">
                       <img
-                        src={`https://api.dicebear.com/7.x/avataaars/svg?seed=${doc?.name}`}
+                        src={`https://api.dicebear.com/7.x/avataaars/svg?seed=${doc?.name || apt.doctorName}`}
                         alt={doc?.name}
                         className="w-full h-full object-cover"
                       />
@@ -458,10 +506,22 @@ const PatientDashboard: React.FC<PatientDashboardProps> = ({
             </div>
             <div className="space-y-3">
               {[
-                { title: 'Diabetes Management', icon: '📊' },
-                { title: 'Healthy Heart Diet', icon: '🥗' },
+                {
+                  title: 'Diabetes Management',
+                  icon: '📊',
+                  content: 'Diabetes is a chronic condition that affects how your body turns food into energy. Management involves maintaining a healthy diet (focus on whole grains, vegetables, and lean proteins), regular physical activity, monitoring blood sugar levels, and taking prescribed medication like insulin or oral diabetes medicines. Regular check-ups are essential to prevent complications such as heart disease or vision problems.'
+                },
+                {
+                  title: 'Healthy Heart Diet',
+                  icon: '🥗',
+                  content: 'A heart-healthy diet emphasizes fruits, vegetables, and whole grains while limiting saturated fats, sodium, and added sugars. Key recommendations include: eating fish rich in omega-3 fatty acids at least twice a week, choosing skinless poultry and lean meats, opting for fat-free or low-fat dairy products, and avoiding trans fats often found in processed foods. Controlling portion sizes is also crucial for maintaining a healthy weight.'
+                },
               ].map((item, i) => (
-                <div key={i} className="p-4 bg-[#FFFFFF] border border-[#E3EAF2] rounded-[12px] flex items-center justify-between group hover:border-[#D6E0EB] hover:bg-[#F4F7FB] transition-colors cursor-pointer">
+                <div
+                  key={i}
+                  onClick={() => setEducationModalContent({ title: item.title, content: item.content })}
+                  className="p-4 bg-[#FFFFFF] border border-[#E3EAF2] rounded-[12px] flex items-center justify-between group hover:border-[#D6E0EB] hover:bg-[#F4F7FB] transition-colors cursor-pointer"
+                >
                   <div className="flex items-center gap-4">
                     <div className="w-10 h-10 rounded-[8px] bg-[#E8F1FA] flex items-center justify-center text-lg">{item.icon}</div>
                     <span className="text-[13px] font-medium text-[#1C2B39]">{item.title}</span>
@@ -498,7 +558,7 @@ const PatientDashboard: React.FC<PatientDashboardProps> = ({
           <div className="space-y-6">
             <p className="text-[12px] font-semibold uppercase tracking-wide text-[#6B7C8F] ml-1">1. Choose Specialist</p>
             <div className="space-y-4">
-              {doctors.map(doc => (
+              {(remoteDoctors.length > 0 ? remoteDoctors : doctors).map(doc => (
                 <button key={doc.id} onClick={() => setSelectedDoctorId(doc.id)} className={`w-full p-4 rounded-[12px] border ${selectedDoctorId === doc.id ? 'bg-[#F0F4F9] border-[#1F4E79] shadow-sm' : 'bg-[#FFFFFF] border-[#E3EAF2] hover:bg-[#F4F7FB]'} transition-colors text-left flex items-center space-x-4 group`}>
                   <div className="w-12 h-12 bg-[#F4F7FB] rounded-[10px] overflow-hidden flex-shrink-0 border border-[#D6E0EB]"><img src={`https://api.dicebear.com/7.x/avataaars/svg?seed=${doc.name}`} alt="" className="w-full h-full object-cover" /></div>
                   <div>
@@ -514,9 +574,9 @@ const PatientDashboard: React.FC<PatientDashboardProps> = ({
               <div className="space-y-2">
                 <label className="text-[12px] font-semibold uppercase tracking-wide text-[#6B7C8F] ml-1">Visit Date</label>
                 <input type="date" value={bookingDate} onChange={e => setBookingDate(e.target.value)} className="w-full p-4 bg-[#F4F7FB] border border-[#D6E0EB] rounded-[10px] text-[14px] font-medium outline-none focus:bg-[#FFFFFF] focus:border-[#1F4E79] transition-colors text-[#1C2B39]" />
-                {selectedDoctorId && doctors.find(d => d.id === selectedDoctorId)?.profile?.availableDays?.length > 0 && (
+                {selectedDoctorId && (remoteDoctors.length > 0 ? remoteDoctors : doctors).find(d => d.id === selectedDoctorId)?.profile?.availableDays?.length > 0 && (
                   <p className="text-[11px] font-medium text-[#1F4E79] ml-1 mt-1">
-                    Available Days: {doctors.find(d => d.id === selectedDoctorId)?.profile?.availableDays.join(', ')}
+                    Available Days: {(remoteDoctors.length > 0 ? remoteDoctors : doctors).find(d => d.id === selectedDoctorId)?.profile?.availableDays.join(', ')}
                   </p>
                 )}
               </div>
@@ -524,7 +584,7 @@ const PatientDashboard: React.FC<PatientDashboardProps> = ({
                 <label className="text-[12px] font-semibold uppercase tracking-wide text-[#6B7C8F] ml-1">Time Slot</label>
                 <div className="grid grid-cols-2 gap-3">
                   {(() => {
-                    const selectedDoc = doctors.find(d => d.id === selectedDoctorId);
+                    const selectedDoc = (remoteDoctors.length > 0 ? remoteDoctors : doctors).find(d => d.id === selectedDoctorId);
                     const slots = selectedDoc?.profile?.availableTimeSlots?.length > 0
                       ? selectedDoc.profile.availableTimeSlots
                       : ['09:00 - 10:00', '10:00 - 11:00', '11:00 - 12:00', '14:00 - 15:00'];
@@ -538,7 +598,8 @@ const PatientDashboard: React.FC<PatientDashboardProps> = ({
             <button
               disabled={!selectedDoctorId || !bookingDate || !bookingTime}
               onClick={async () => {
-                const isSuccess = await onBook(selectedDoctorId!, doctors.find(d => d.id === selectedDoctorId)!.name, bookingDate, bookingTime);
+                const docList = remoteDoctors.length > 0 ? remoteDoctors : doctors;
+                const isSuccess = await onBook(selectedDoctorId!, docList.find(d => d.id === selectedDoctorId)!.name, bookingDate, bookingTime);
                 if (isSuccess !== false) setIsBookingSuccessful(true);
               }}
               className="w-full py-4 bg-[#1F4E79] text-[#FFFFFF] rounded-[8px] font-semibold text-[15px] shadow-sm hover:bg-[#163A5C] transition-colors disabled:opacity-50 disabled:bg-[#D6E0EB] disabled:cursor-not-allowed disabled:text-[#6B7C8F] disabled:shadow-none"
@@ -556,12 +617,14 @@ const PatientDashboard: React.FC<PatientDashboardProps> = ({
   );
 
   const renderDoctors = () => {
-    const filteredDoctors = doctors.filter(d => {
-      const searchTarget = (d.name + ' ' + (d.profile?.specialization || d.specialty || '')).toLowerCase();
-      const matchesSearch = searchTarget.includes(doctorsSearchTerm.toLowerCase());
+    // Determine the source of doctors: remote API or mock fallback
+    const sourceDoctors = remoteDoctors.length > 0 ? remoteDoctors : doctors;
+
+    // Filter purely frontend for pincode since backend doesn't support it yet
+    const filteredDoctors = sourceDoctors.filter(d => {
       const zip = d.profile?.address?.zip || d.addressDetails?.zip || '';
-      const matchesPincode = zip.includes(doctorsPincodeTerm) || !doctorsPincodeTerm;
-      return matchesSearch && matchesPincode;
+      const matchesPincode = String(zip).includes(doctorsPincodeTerm) || !doctorsPincodeTerm;
+      return matchesPincode;
     });
 
     return (
@@ -853,11 +916,24 @@ const PatientDashboard: React.FC<PatientDashboardProps> = ({
       {activeTab === 'chat' && renderChat()}
       {activeTab === 'reports' && (
         <div className="space-y-10 animate-in fade-in duration-700">
-          <div className="flex items-center gap-6 animate-in slide-in-from-left duration-700">
-            <div className="w-16 h-16 bg-[#FFFFFF] rounded-[12px] flex items-center justify-center text-3xl shadow-sm border border-[#E3EAF2]">🗄️</div>
-            <div>
-              <h1 className="text-[28px] font-semibold text-[#1C2B39] tracking-tight leading-none">Clinical Vault</h1>
-              <p className="text-[14px] font-medium text-[#6B7C8F] mt-1 tracking-wide">Categorized clinical report network active</p>
+          <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6 animate-in slide-in-from-left duration-700">
+            <div className="flex items-center gap-6">
+              <div className="w-16 h-16 bg-[#FFFFFF] rounded-[12px] flex items-center justify-center text-3xl shadow-sm border border-[#E3EAF2]">🗄️</div>
+              <div>
+                <h1 className="text-[28px] font-semibold text-[#1C2B39] tracking-tight leading-none">Clinical Vault</h1>
+                <p className="text-[14px] font-medium text-[#6B7C8F] mt-1 tracking-wide">Categorized clinical report network active</p>
+              </div>
+            </div>
+
+            <div className="relative w-full md:w-72">
+              <span className="absolute inset-y-0 left-0 flex items-center pl-4 text-[#9FB3C8]">🔍</span>
+              <input
+                type="text"
+                placeholder="Search reports or conditions..."
+                value={reportsSearchTerm}
+                onChange={(e) => setReportsSearchTerm(e.target.value)}
+                className="w-full pl-12 pr-6 py-3 bg-[#FFFFFF] border border-[#E3EAF2] rounded-[12px] text-[14px] font-medium text-[#1C2B39] outline-none focus:border-[#1F4E79] shadow-sm transition-colors"
+              />
             </div>
           </div>
 
@@ -873,56 +949,66 @@ const PatientDashboard: React.FC<PatientDashboardProps> = ({
               </div>
 
               <div className="space-y-4 flex-1">
-                {medicalReports.filter(r => r.reportType === 'doctor_consultation').map(r => {
-                  const rAny = r as any;
-                  return (
-                    <div key={r.id} className="p-4 bg-[#F4F7FB] border border-[#E3EAF2] rounded-[12px] hover:border-[#D6E0EB] hover:bg-[#FFFFFF] transition-colors group list-none">
-                      <div className="flex items-start justify-between gap-3">
-                        <div className="flex-1 min-w-0">
-                          <p className="text-[14px] font-semibold text-[#1C2B39] group-hover:text-[#1F4E79] transition-colors truncate">{r.title}</p>
-                          <div className="flex items-center gap-2 flex-wrap mt-1">
-                            <p className="text-[12px] font-medium text-[#6B7C8F]">
-                              Dr. {rAny.doctorId?.name || r.doctorName || 'Doctor'} •{' '}
-                              {new Date(rAny.createdAt || r.date).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}
-                            </p>
-                          </div>
-                          {rAny.diagnosis && (
-                            <p className="text-[12px] text-[#1F4E79] font-medium mt-2">
-                              🩺 {rAny.diagnosis}
-                            </p>
-                          )}
-                          {rAny.prescriptions?.length > 0 && (
-                            <div className="mt-3">
-                              <p className="text-[11px] font-semibold uppercase tracking-wide text-[#6B7C8F] mb-1.5">Prescription</p>
-                              <div className="space-y-1">
-                                {rAny.prescriptions.map((med: any, i: number) => (
-                                  <div key={i} className="flex items-center gap-2 text-[12px]">
-                                    <span className="w-4 h-4 rounded-full bg-[#E8F1FA] text-[#1F4E79] flex items-center justify-center text-[9px] font-semibold shrink-0">{i + 1}</span>
-                                    <span className="font-medium text-[#1C2B39]">{med.name}</span>
-                                    {med.dose && <span className="text-[#6B7C8F]">— {med.dose}</span>}
-                                    {med.daysCount && <span className="text-[#9FB3C8] text-[11px]">× {med.daysCount} day{med.daysCount > 1 ? 's' : ''}</span>}
-                                  </div>
-                                ))}
-                              </div>
-                            </div>
-                          )}
-                        </div>
-                        <button
-                          onClick={() => handleDownloadReport(rAny.fileData || r.fileData, rAny.fileName || r.fileName)}
-                          className="w-10 h-10 shrink-0 bg-[#F0F4F9] border border-[#D6E0EB] rounded-[8px] flex items-center justify-center text-[#1F4E79] hover:bg-[#E3EAF2] hover:border-[#1F4E79] transition-colors"
-                        >
-                          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M4 16v1a2 2 0 002 2h12a2 2 0 002-2v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg>
-                        </button>
+                {(() => {
+                  const currentReports = remoteReports || medicalReports;
+                  const doctorReports = currentReports.filter(r => r.reportType === 'doctor_consultation');
+
+                  if (doctorReports.length === 0) {
+                    return (
+                      <div className="py-12 text-center opacity-60 select-none">
+                        <div className="text-4xl mb-4 grayscale">📭</div>
+                        <p className="text-[12px] font-semibold uppercase tracking-wide text-[#6B7C8F]">
+                          {reportsSearchTerm ? "No reports match your search criteria" : "No verified reports received."}
+                        </p>
                       </div>
-                    </div>
-                  );
-                })}
-                {medicalReports.filter(r => r.reportType === 'doctor_consultation').length === 0 && (
-                  <div className="py-12 text-center opacity-60 select-none">
-                    <div className="text-4xl mb-4 grayscale">📭</div>
-                    <p className="text-[12px] font-semibold uppercase tracking-wide text-[#6B7C8F]">No verified reports received.</p>
-                  </div>
-                )}
+                    );
+                  }
+
+                  return doctorReports.map(r => {
+                    const rAny = r as any;
+                    return (
+                      <div key={r.id} className="p-4 bg-[#F4F7FB] border border-[#E3EAF2] rounded-[12px] hover:border-[#D6E0EB] hover:bg-[#FFFFFF] transition-colors group list-none">
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="flex-1 min-w-0">
+                            <p className="text-[14px] font-semibold text-[#1C2B39] group-hover:text-[#1F4E79] transition-colors truncate">{r.title}</p>
+                            <div className="flex items-center gap-2 flex-wrap mt-1">
+                              <p className="text-[12px] font-medium text-[#6B7C8F]">
+                                Dr. {rAny.doctorId?.name || r.doctorName || 'Doctor'} •{' '}
+                                {new Date(rAny.createdAt || r.date).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}
+                              </p>
+                            </div>
+                            {rAny.diagnosis && (
+                              <p className="text-[12px] text-[#1F4E79] font-medium mt-2">
+                                🩺 {rAny.diagnosis}
+                              </p>
+                            )}
+                            {rAny.prescriptions?.length > 0 && (
+                              <div className="mt-3">
+                                <p className="text-[11px] font-semibold uppercase tracking-wide text-[#6B7C8F] mb-1.5">Prescription</p>
+                                <div className="space-y-1">
+                                  {rAny.prescriptions.map((med: any, i: number) => (
+                                    <div key={i} className="flex items-center gap-2 text-[12px]">
+                                      <span className="w-4 h-4 rounded-full bg-[#E8F1FA] text-[#1F4E79] flex items-center justify-center text-[9px] font-semibold shrink-0">{i + 1}</span>
+                                      <span className="font-medium text-[#1C2B39]">{med.name}</span>
+                                      {med.dose && <span className="text-[#6B7C8F]">— {med.dose}</span>}
+                                      {med.daysCount && <span className="text-[#9FB3C8] text-[11px]">× {med.daysCount} day{med.daysCount > 1 ? 's' : ''}</span>}
+                                    </div>
+                                  ))}
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                          <button
+                            onClick={() => handleDownloadReport(rAny.fileData || r.fileData, rAny.fileName || r.fileName)}
+                            className="w-10 h-10 shrink-0 bg-[#F0F4F9] border border-[#D6E0EB] rounded-[8px] flex items-center justify-center text-[#1F4E79] hover:bg-[#E3EAF2] hover:border-[#1F4E79] transition-colors"
+                          >
+                            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M4 16v1a2 2 0 002 2h12a2 2 0 002-2v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg>
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  });
+                })()}
               </div>
             </div>
 
@@ -938,28 +1024,38 @@ const PatientDashboard: React.FC<PatientDashboardProps> = ({
               </div>
 
               <div className="space-y-4 flex-1">
-                {medicalReports.filter(r => r.reportType === 'ai_intake').map(r => (
-                  <div key={r.id} className="p-4 bg-[#F4F7FB] border border-[#E3EAF2] rounded-[12px] hover:border-[#D6E0EB] hover:bg-[#FFFFFF] transition-colors group list-none">
-                    <div className="flex items-center justify-between">
-                      <div className="flex-1 min-w-0 pr-4">
-                        <p className="text-[14px] font-semibold text-[#1C2B39] group-hover:text-[#1F4E79] transition-colors truncate">{r.title}</p>
-                        <p className="text-[12px] font-medium text-[#6B7C8F] mt-1 truncate">AI Clinical Scribe • {r.date}</p>
+                {(() => {
+                  const currentReports = remoteReports || medicalReports;
+                  const aiReports = currentReports.filter(r => r.reportType === 'ai_intake');
+
+                  if (aiReports.length === 0) {
+                    return (
+                      <div className="py-12 text-center opacity-60 select-none">
+                        <div className="text-4xl mb-4 grayscale">🛸</div>
+                        <p className="text-[12px] font-semibold uppercase tracking-wide text-[#6B7C8F]">
+                          {reportsSearchTerm ? "No reports match your search criteria" : "Initialize an AI intake session to generate reports."}
+                        </p>
                       </div>
-                      <button
-                        onClick={() => handleDownloadReport(r.fileData, r.fileName)}
-                        className="w-10 h-10 shrink-0 bg-[#F0F4F9] border border-[#D6E0EB] rounded-[8px] flex items-center justify-center text-[#1F4E79] hover:bg-[#E3EAF2] hover:border-[#1F4E79] transition-colors"
-                      >
-                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M4 16v1a2 2 0 002 2h12a2 2 0 002-2v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg>
-                      </button>
+                    );
+                  }
+
+                  return aiReports.map(r => (
+                    <div key={r.id} className="p-4 bg-[#F4F7FB] border border-[#E3EAF2] rounded-[12px] hover:border-[#D6E0EB] hover:bg-[#FFFFFF] transition-colors group list-none">
+                      <div className="flex items-center justify-between">
+                        <div className="flex-1 min-w-0 pr-4">
+                          <p className="text-[14px] font-semibold text-[#1C2B39] group-hover:text-[#1F4E79] transition-colors truncate">{r.title}</p>
+                          <p className="text-[12px] font-medium text-[#6B7C8F] mt-1 truncate">AI Clinical Scribe • {r.date}</p>
+                        </div>
+                        <button
+                          onClick={() => handleDownloadReport(r.fileData, r.fileName)}
+                          className="w-10 h-10 shrink-0 bg-[#F0F4F9] border border-[#D6E0EB] rounded-[8px] flex items-center justify-center text-[#1F4E79] hover:bg-[#E3EAF2] hover:border-[#1F4E79] transition-colors"
+                        >
+                          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M4 16v1a2 2 0 002 2h12a2 2 0 002-2v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg>
+                        </button>
+                      </div>
                     </div>
-                  </div>
-                ))}
-                {medicalReports.filter(r => r.reportType === 'ai_intake').length === 0 && (
-                  <div className="py-12 text-center opacity-60 select-none">
-                    <div className="text-4xl mb-4 grayscale">🛸</div>
-                    <p className="text-[12px] font-semibold uppercase tracking-wide text-[#6B7C8F]">Initialize an AI intake session to generate reports.</p>
-                  </div>
-                )}
+                  ));
+                })()}
               </div>
             </div>
           </div>
@@ -1141,6 +1237,91 @@ const PatientDashboard: React.FC<PatientDashboardProps> = ({
       })()}
 
 
+      {/* ── Settings ── */}
+      {activeTab === 'settings' && (
+        <div className="space-y-10 animate-in fade-in duration-700">
+          <div className="flex items-center gap-6 animate-in slide-in-from-left duration-700">
+            <div className="w-16 h-16 bg-[#FFFFFF] rounded-[12px] flex items-center justify-center text-3xl shadow-sm border border-[#E3EAF2]">⚙️</div>
+            <div>
+              <h1 className="text-[28px] font-semibold text-[#1C2B39] tracking-tight leading-none">Settings</h1>
+              <p className="text-[14px] font-medium text-[#6B7C8F] mt-1 tracking-wide">Manage your account preferences and security</p>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+            {/* Account Settings */}
+            <div className="bg-[#FFFFFF] border border-[#E3EAF2] rounded-[16px] p-8 shadow-[0_8px_30px_rgba(15,42,67,0.12)] space-y-6">
+              <h3 className="text-[18px] font-semibold text-[#1C2B39] flex items-center gap-2">
+                <span className="w-8 h-8 rounded-lg bg-[#E8F1FA] text-[#1F4E79] flex items-center justify-center text-[14px]">👤</span>
+                Profile Settings
+              </h3>
+              <div className="space-y-4">
+                <div>
+                  <label className="text-[12px] font-semibold uppercase tracking-wide text-[#6B7C8F] mb-1.5 block">Full Name</label>
+                  <input type="text" defaultValue={user.name} className="w-full p-3.5 bg-[#F4F7FB] border border-[#D6E0EB] rounded-[10px] text-[14px] font-medium text-[#1C2B39] outline-none focus:bg-[#FFFFFF] focus:border-[#1F4E79] transition-colors" />
+                </div>
+                <div>
+                  <label className="text-[12px] font-semibold uppercase tracking-wide text-[#6B7C8F] mb-1.5 block">Email Address</label>
+                  <input type="email" defaultValue={user.email} className="w-full p-3.5 bg-[#F4F7FB] border border-[#D6E0EB] rounded-[10px] text-[14px] font-medium text-[#1C2B39] outline-none focus:bg-[#FFFFFF] focus:border-[#1F4E79] transition-colors" />
+                </div>
+                <div>
+                  <label className="text-[12px] font-semibold uppercase tracking-wide text-[#6B7C8F] mb-1.5 block">Phone Number</label>
+                  <input type="tel" defaultValue={intakeData?.contactInfo?.phone || '+1 (555) 000-0000'} className="w-full p-3.5 bg-[#F4F7FB] border border-[#D6E0EB] rounded-[10px] text-[14px] font-medium text-[#1C2B39] outline-none focus:bg-[#FFFFFF] focus:border-[#1F4E79] transition-colors" />
+                </div>
+                <button className="w-full py-4 bg-[#1F4E79] text-[#FFFFFF] rounded-[10px] font-semibold text-[14px] shadow-sm hover:bg-[#163A5C] transition-colors mt-2">
+                  Save Profile Changes
+                </button>
+              </div>
+            </div>
+
+            {/* Notification & Security */}
+            <div className="space-y-8">
+              <div className="bg-[#FFFFFF] border border-[#E3EAF2] rounded-[16px] p-8 shadow-[0_8px_30px_rgba(15,42,67,0.12)] space-y-6">
+                <h3 className="text-[18px] font-semibold text-[#1C2B39] flex items-center gap-2">
+                  <span className="w-8 h-8 rounded-lg bg-[#E8F1FA] text-[#1F4E79] flex items-center justify-center text-[14px]">🔔</span>
+                  Notifications
+                </h3>
+                <div className="space-y-4">
+                  {[
+                    { title: 'Email Alerts', desc: 'Receive updates about appointments' },
+                    { title: 'SMS Notifications', desc: 'Get text messages for reminders' },
+                    { title: 'Medical Reports', desc: 'Notify when new reports are available' }
+                  ].map((item, i) => (
+                    <div key={i} className="flex flex-row items-center justify-between p-4 border border-[#E3EAF2] rounded-[10px] hover:border-[#D6E0EB] transition-colors">
+                      <div>
+                        <p className="font-semibold text-[#1C2B39] text-[14px]">{item.title}</p>
+                        <p className="text-[12px] text-[#6B7C8F] mt-0.5">{item.desc}</p>
+                      </div>
+                      <label className="relative inline-flex items-center cursor-pointer">
+                        <input type="checkbox" className="sr-only peer" defaultChecked={i !== 1} />
+                        <div className="w-11 h-6 bg-[#D6E0EB] peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-[#10B981]"></div>
+                      </label>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <div className="bg-[#FFFFFF] border border-[#E3EAF2] rounded-[16px] p-8 shadow-[0_8px_30px_rgba(15,42,67,0.12)] space-y-6">
+                <h3 className="text-[18px] font-semibold text-[#1C2B39] flex items-center gap-2">
+                  <span className="w-8 h-8 rounded-lg bg-[#E8F1FA] text-[#1F4E79] flex items-center justify-center text-[14px]">🔒</span>
+                  Security
+                </h3>
+                <div className="space-y-4">
+                  <button className="w-full py-4 bg-[#F4F7FB] border border-[#D6E0EB] text-[#1F4E79] rounded-[10px] font-semibold text-[14px] hover:bg-[#E3EAF2] transition-colors text-left px-5 flex justify-between items-center">
+                    Change Password
+                    <span className="text-[16px]">→</span>
+                  </button>
+                  <button className="w-full py-4 bg-[#F4F7FB] border border-[#D6E0EB] text-[#1F4E79] rounded-[10px] font-semibold text-[14px] hover:bg-[#E3EAF2] transition-colors text-left px-5 flex justify-between items-center">
+                    Two-Factor Authentication
+                    <span className="text-[11px] bg-[#10B981] text-white px-2 py-0.5 rounded-full uppercase tracking-wide">Enabled</span>
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Body Scanner Modal */}
       {isBodyScanOpen && (
         <BodyScanner
@@ -1221,6 +1402,29 @@ const PatientDashboard: React.FC<PatientDashboardProps> = ({
                   <span className="group-hover:translate-x-1 transition-transform font-bold">➜</span>
                 </button>
               </form>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Education Modal */}
+      {educationModalContent && (
+        <div className="fixed inset-0 z-[4000] bg-[#0F2A43]/40 backdrop-blur-sm flex items-center justify-center p-6 animate-in fade-in duration-300">
+          <div className="max-w-md w-full bg-[#FFFFFF] rounded-[16px] shadow-[0_8px_30px_rgba(15,42,67,0.12)] flex flex-col overflow-hidden border border-[#E3EAF2] animate-in zoom-in-95 duration-300">
+            <div className="p-6 bg-[#FFFFFF] border-b border-[#E3EAF2] flex justify-between items-center">
+              <h3 className="font-semibold text-[18px] text-[#1C2B39] tracking-tight">{educationModalContent.title}</h3>
+              <button onClick={() => setEducationModalContent(null)} className="w-8 h-8 bg-[#F0F4F9] text-[#1C2B39] rounded-full flex items-center justify-center hover:bg-[#E3EAF2] transition-colors font-semibold border border-[#D6E0EB]">✕</button>
+            </div>
+            <div className="p-6 text-[14px] text-[#6B7C8F] leading-relaxed">
+              {educationModalContent.content}
+            </div>
+            <div className="p-6 border-t border-[#E3EAF2] flex justify-end">
+              <button
+                onClick={() => setEducationModalContent(null)}
+                className="px-6 py-2.5 bg-[#1F4E79] text-[#FFFFFF] rounded-[8px] font-semibold text-[13px] shadow-sm hover:bg-[#163A5C] transition-colors"
+              >
+                Close
+              </button>
             </div>
           </div>
         </div>

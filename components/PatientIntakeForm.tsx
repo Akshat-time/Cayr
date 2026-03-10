@@ -8,7 +8,7 @@ interface PatientIntakeFormProps {
     onSkip: () => void;
 }
 
-type Step = 1 | 2 | 3;
+type Step = 1 | 2;
 
 const BLOOD_TYPES = ['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-', 'Unknown'];
 const COMMON_CONDITIONS = [
@@ -98,19 +98,11 @@ const PatientIntakeForm: React.FC<PatientIntakeFormProps> = ({ user, onComplete,
     const [existingStatus, setExistingStatus] = useState<'draft' | 'submitted' | 'skipped' | null>(null);
 
     // Step 1
-    const [height, setHeight] = useState('');
-    const [weight, setWeight] = useState('');
-    const [bloodPressure, setBloodPressure] = useState('');
+    const [age, setAge] = useState('');
     const [heartRate, setHeartRate] = useState('');
     const [bloodType, setBloodType] = useState('');
 
     // Step 2
-    const [allergies, setAllergies] = useState<string[]>([]);
-    const [conditions, setConditions] = useState<string[]>([]);
-    const [medications, setMedications] = useState<string[]>([]);
-    const [medicalHistory, setMedicalHistory] = useState('');
-
-    // Step 3
     const [symptoms, setSymptoms] = useState('');
     const [files, setFiles] = useState<File[]>([]);
     const fileInputRef = useRef<HTMLInputElement>(null);
@@ -131,15 +123,9 @@ const PatientIntakeForm: React.FC<PatientIntakeFormProps> = ({ user, onComplete,
                     const d = data.intake;
                     setExistingStatus(d.status);
                     if (d.status === 'draft' || d.status === 'submitted') {
-                        if (d.height) setHeight(String(d.height));
-                        if (d.weight) setWeight(String(d.weight));
-                        if (d.bloodPressure) setBloodPressure(d.bloodPressure);
+                        if (d.age) setAge(String(d.age));
                         if (d.heartRate) setHeartRate(String(d.heartRate));
                         if (d.bloodType) setBloodType(d.bloodType);
-                        if (d.allergies?.length) setAllergies(d.allergies);
-                        if (d.conditions?.length) setConditions(d.conditions);
-                        if (d.currentMedications?.length) setMedications(d.currentMedications);
-                        if (d.medicalHistory) setMedicalHistory(d.medicalHistory);
                         if (d.symptoms) setSymptoms(d.symptoms);
                         if (d.lastModifiedAt) {
                             setDraftSavedAt(new Date(d.lastModifiedAt).toLocaleString());
@@ -217,12 +203,9 @@ const PatientIntakeForm: React.FC<PatientIntakeFormProps> = ({ user, onComplete,
                 // Lab values (nested)
                 if (ext.labValues) {
                     const labKeyMap: Record<string, string> = {
-                        bloodPressure: 'bloodPressure',
                         heartRate: 'heartRate',
                         glucose: 'glucose',
                         hemoglobin: 'hemoglobin',
-                        height: 'height',
-                        weight: 'weight',
                     };
                     for (const [labKey, fieldKey] of Object.entries(labKeyMap)) {
                         addField(fieldKey, ext.labValues[labKey]);
@@ -281,15 +264,9 @@ const PatientIntakeForm: React.FC<PatientIntakeFormProps> = ({ user, onComplete,
             if (!entry || entry.value === null) continue;
             const v = entry.value;
             switch (key) {
-                case 'height': setHeight(String(v)); newAutoFilled.add('height'); break;
-                case 'weight': setWeight(String(v)); newAutoFilled.add('weight'); break;
-                case 'bloodPressure': setBloodPressure(String(v)); newAutoFilled.add('bloodPressure'); break;
+                case 'age': setAge(String(v)); newAutoFilled.add('age'); break;
                 case 'heartRate': setHeartRate(String(v)); newAutoFilled.add('heartRate'); break;
                 case 'bloodType': if (typeof v === 'string') { setBloodType(v); newAutoFilled.add('bloodType'); } break;
-                case 'allergies': if (Array.isArray(v) && v.length > 0) { setAllergies(v as string[]); newAutoFilled.add('allergies'); } break;
-                case 'conditions': if (Array.isArray(v) && v.length > 0) { setConditions(v as string[]); newAutoFilled.add('conditions'); } break;
-                case 'medications': if (Array.isArray(v) && v.length > 0) { setMedications(v as string[]); newAutoFilled.add('medications'); } break;
-                case 'medicalHistory': if (typeof v === 'string') { setMedicalHistory(v); newAutoFilled.add('medicalHistory'); } break;
                 case 'symptoms': if (typeof v === 'string') { setSymptoms(v); newAutoFilled.add('symptoms'); } break;
             }
         }
@@ -304,11 +281,8 @@ const PatientIntakeForm: React.FC<PatientIntakeFormProps> = ({ user, onComplete,
         setError('');
         try {
             const body = {
-                height, weight, bloodPressure, heartRate, bloodType,
-                allergies: JSON.stringify(allergies),
-                conditions: JSON.stringify(conditions),
-                currentMedications: JSON.stringify(medications),
-                medicalHistory, symptoms,
+                age, heartRate, bloodType,
+                symptoms,
                 status: 'draft',
             };
             const res = await fetch('/api/intake/save-draft', {
@@ -333,15 +307,9 @@ const PatientIntakeForm: React.FC<PatientIntakeFormProps> = ({ user, onComplete,
         setIsSubmitting(true); setError('');
         try {
             const fd = new FormData();
-            fd.append('height', height);
-            fd.append('weight', weight);
-            fd.append('bloodPressure', bloodPressure);
+            fd.append('age', age);
             fd.append('heartRate', heartRate);
             fd.append('bloodType', bloodType);
-            fd.append('allergies', JSON.stringify(allergies));
-            fd.append('conditions', JSON.stringify(conditions));
-            fd.append('currentMedications', JSON.stringify(medications));
-            fd.append('medicalHistory', medicalHistory);
             fd.append('symptoms', symptoms);
             fd.append('autoFilledFields', JSON.stringify([...autoFilledFields]));
             files.forEach(f => fd.append('files', f));
@@ -367,8 +335,25 @@ const PatientIntakeForm: React.FC<PatientIntakeFormProps> = ({ user, onComplete,
         finally { setIsSkipping(false); onSkip(); }
     };
 
-    const stepLabels = ['Vitals & Report', 'Medical Background', 'Symptoms & Review'];
+    const stepLabels = ['Vitals & Report', 'Symptoms & Review'];
     const af = autoFilledFields;
+
+    // Calculate age from DOB on mount
+    useEffect(() => {
+        if (user?.dob && !age) {
+            const birthDate = new Date(user.dob);
+            const today = new Date();
+            let calculatedAge = today.getFullYear() - birthDate.getFullYear();
+            const m = today.getMonth() - birthDate.getMonth();
+            if (m < 0 || (m === 0 && today.getDate() < birthDate.getDate())) {
+                calculatedAge--;
+            }
+            if (calculatedAge > 0) {
+                setAge(String(calculatedAge));
+                setAutoFilledFields(prev => new Set([...prev, 'age']));
+            }
+        }
+    }, [user, age]);
 
     if (isLoadingDraft) {
         return (
@@ -387,7 +372,7 @@ const PatientIntakeForm: React.FC<PatientIntakeFormProps> = ({ user, onComplete,
             {showPreview && extractionResult && (
                 <ExtractionPreview
                     result={extractionResult}
-                    currentValues={{ height, weight, bloodPressure, heartRate, bloodType, allergies, conditions, medications, medicalHistory, symptoms }}
+                    currentValues={{ age, heartRate, bloodType, symptoms }}
                     onAccept={handleAcceptExtraction}
                     onSkip={() => setShowPreview(false)}
                 />
@@ -426,7 +411,7 @@ const PatientIntakeForm: React.FC<PatientIntakeFormProps> = ({ user, onComplete,
                             </div>
                             <div className="h-2 bg-blue-400/40 rounded-full overflow-hidden">
                                 <div className="h-full bg-white rounded-full transition-all duration-500"
-                                    style={{ width: `${step === 1 ? 5 : step === 2 ? 50 : 100}%` }} />
+                                    style={{ width: `${step === 1 ? 50 : 100}%` }} />
                             </div>
                         </div>
                     </div>
@@ -511,17 +496,9 @@ const PatientIntakeForm: React.FC<PatientIntakeFormProps> = ({ user, onComplete,
                                 )}
 
                                 <div className="grid grid-cols-2 gap-4">
-                                    <Field label="Height (cm)" hint="e.g. 170" isAutoFilled={af.has('height')}>
-                                        <input type="number" value={height} onChange={e => { setHeight(e.target.value); setAutoFilledFields(p => { const s = new Set(p); s.delete('height'); return s; }); }}
-                                            placeholder="170" className={af.has('height') ? autoFilledInputCls : inputCls} />
-                                    </Field>
-                                    <Field label="Weight (kg)" hint="e.g. 65" isAutoFilled={af.has('weight')}>
-                                        <input type="number" value={weight} onChange={e => { setWeight(e.target.value); setAutoFilledFields(p => { const s = new Set(p); s.delete('weight'); return s; }); }}
-                                            placeholder="65" className={af.has('weight') ? autoFilledInputCls : inputCls} />
-                                    </Field>
-                                    <Field label="Blood Pressure" hint="e.g. 120/80" isAutoFilled={af.has('bloodPressure')}>
-                                        <input type="text" value={bloodPressure} onChange={e => { setBloodPressure(e.target.value); setAutoFilledFields(p => { const s = new Set(p); s.delete('bloodPressure'); return s; }); }}
-                                            placeholder="120/80" className={af.has('bloodPressure') ? autoFilledInputCls : inputCls} />
+                                    <Field label="Age" hint="Calculated from DOB" isAutoFilled={af.has('age')}>
+                                        <input type="number" value={age} onChange={e => { setAge(e.target.value); setAutoFilledFields(p => { const s = new Set(p); s.delete('age'); return s; }); }}
+                                            placeholder="e.g. 35" className={af.has('age') ? autoFilledInputCls : inputCls} />
                                     </Field>
                                     <Field label="Heart Rate (bpm)" hint="e.g. 72" isAutoFilled={af.has('heartRate')}>
                                         <input type="number" value={heartRate} onChange={e => { setHeartRate(e.target.value); setAutoFilledFields(p => { const s = new Set(p); s.delete('heartRate'); return s; }); }}
@@ -538,29 +515,8 @@ const PatientIntakeForm: React.FC<PatientIntakeFormProps> = ({ user, onComplete,
                             </div>
                         )}
 
-                        {/* Step 2 — Medical Background */}
+                        {/* Step 2 — Symptoms & Review */}
                         {step === 2 && (
-                            <div className="space-y-5 animate-in fade-in slide-in-from-right-4 duration-300">
-                                <p className="text-slate-500 text-sm">Help your care team understand your history.</p>
-                                <Field label="Known Allergies" isAutoFilled={af.has('allergies')}>
-                                    <TagInput values={allergies} suggestions={COMMON_ALLERGIES} onChange={v => { setAllergies(v); setAutoFilledFields(p => { const s = new Set(p); s.delete('allergies'); return s; }); }} placeholder="e.g. Penicillin…" isAutoFilled={af.has('allergies')} />
-                                </Field>
-                                <Field label="Pre-existing Conditions" isAutoFilled={af.has('conditions')}>
-                                    <TagInput values={conditions} suggestions={COMMON_CONDITIONS} onChange={v => { setConditions(v); setAutoFilledFields(p => { const s = new Set(p); s.delete('conditions'); return s; }); }} placeholder="e.g. Diabetes…" isAutoFilled={af.has('conditions')} />
-                                </Field>
-                                <Field label="Current Medications" isAutoFilled={af.has('medications')}>
-                                    <TagInput values={medications} suggestions={[]} onChange={v => { setMedications(v); setAutoFilledFields(p => { const s = new Set(p); s.delete('medications'); return s; }); }} placeholder="e.g. Metformin 500mg…" isAutoFilled={af.has('medications')} />
-                                </Field>
-                                <Field label="Medical History" hint="Previous surgeries, hospitalizations, major illnesses" isAutoFilled={af.has('medicalHistory')}>
-                                    <textarea value={medicalHistory} onChange={e => { setMedicalHistory(e.target.value); setAutoFilledFields(p => { const s = new Set(p); s.delete('medicalHistory'); return s; }); }}
-                                        rows={3} placeholder="Briefly describe any relevant medical history…"
-                                        className={(af.has('medicalHistory') ? autoFilledInputCls : inputCls) + ' resize-none'} />
-                                </Field>
-                            </div>
-                        )}
-
-                        {/* Step 3 — Symptoms & Review */}
-                        {step === 3 && (
                             <div className="space-y-5 animate-in fade-in slide-in-from-right-4 duration-300">
                                 <p className="text-slate-500 text-sm">Please review your information and describe any current symptoms you are experiencing before submitting your profile.</p>
                                 <Field label="Current Symptoms" hint="Describe what you're experiencing now" isAutoFilled={af.has('symptoms')}>
@@ -596,21 +552,21 @@ const PatientIntakeForm: React.FC<PatientIntakeFormProps> = ({ user, onComplete,
                             </button>
 
                             <div className="flex items-center gap-2">
-                                {[1, 2, 3].map(s => (
+                                {[1, 2].map(s => (
                                     <div key={s} className={`h-2 rounded-full transition-all ${s === step ? 'bg-[#3b5bfd] w-5' : s < step ? 'bg-[#3b5bfd] opacity-40 w-2' : 'bg-slate-200 w-2'}`} />
                                 ))}
                             </div>
 
                             <div className="flex items-center gap-2">
-                                {/* Save Draft button — shown on steps 1 and 2 */}
-                                {step < 3 && (
+                                {/* Save Draft button — shown on step 1 */}
+                                {step < 2 && (
                                     <button type="button" onClick={handleSaveDraft} disabled={isSavingDraft}
                                         className="px-3 py-2 rounded-xl text-slate-500 border border-slate-200 font-semibold text-xs hover:bg-slate-50 transition disabled:opacity-50">
                                         {isSavingDraft ? '💾 Saving…' : '💾 Draft'}
                                     </button>
                                 )}
-                                {step < 3 ? (
-                                    <button type="button" onClick={() => setStep(s => Math.min(3, s + 1) as Step)}
+                                {step < 2 ? (
+                                    <button type="button" onClick={() => setStep(s => Math.min(2, s + 1) as Step)}
                                         className="px-5 py-2 bg-[#3b5bfd] text-white rounded-xl font-bold text-sm shadow-lg shadow-blue-500/20 hover:bg-blue-700 transition">
                                         Next →
                                     </button>

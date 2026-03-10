@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { connectVoiceBridge } from '../services/geminiService';
+import { connectVoiceBridge, createGeneralAISession } from '../services/geminiService';
 import { LiveServerMessage } from '@google/genai';
 
 interface MultilingualBridgeProps {
@@ -8,10 +8,13 @@ interface MultilingualBridgeProps {
 }
 
 const MultilingualBridge: React.FC<MultilingualBridgeProps> = ({ onClose, partnerName }) => {
-  const [status, setStatus] = useState<'connecting' | 'active' | 'error'>('connecting');
+  const [status, setStatus] = useState<'connecting' | 'active' | 'error' | 'text_fallback'>('connecting');
   const [isMuted, setIsMuted] = useState(false);
+  const [textInput, setTextInput] = useState('');
+  const [isTranslating, setIsTranslating] = useState(false);
   const [transcriptions, setTranscriptions] = useState<{ role: 'user' | 'ai', text: string }[]>([]);
   const transcriptEndRef = useRef<HTMLDivElement>(null);
+  const textSessionRef = useRef<any>(null);
 
   const inputAudioContextRef = useRef<AudioContext | null>(null);
   const outputAudioContextRef = useRef<AudioContext | null>(null);
@@ -148,9 +151,11 @@ const MultilingualBridge: React.FC<MultilingualBridgeProps> = ({ onClose, partne
         });
 
         if (!bridgePromise) {
-          console.warn("Voice Bridge not supported on fallback.");
+          console.warn("Voice Bridge not supported on fallback. Switching to text fallback.");
           if (timeoutRef.current) clearTimeout(timeoutRef.current);
-          setStatus('error');
+          textSessionRef.current = createGeneralAISession();
+          setStatus('text_fallback');
+          setTranscriptions([{ role: 'ai', text: "Real-time voice streaming is currently unavailable. Switched to Text Translation Fallback mode. Please type your message below to translate." }]);
           return;
         }
 
@@ -164,15 +169,35 @@ const MultilingualBridge: React.FC<MultilingualBridgeProps> = ({ onClose, partne
     };
 
     setupLiveSession();
-
     return () => {
       if (timeoutRef.current) clearTimeout(timeoutRef.current);
       stream?.getTracks().forEach(t => t.stop());
       inputAudioContextRef.current?.close();
       outputAudioContextRef.current?.close();
-      sessionPromiseRef.current?.then(s => s?.close());
+      sessionPromiseRef.current?.then((s: any) => s?.close());
     };
   }, []);
+
+  const handleTextTranslate = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!textInput.trim() || isTranslating) return;
+
+    const msg = textInput;
+    setTextInput('');
+    setTranscriptions(prev => [...prev, { role: 'user', text: msg }]);
+    setIsTranslating(true);
+
+    try {
+      const response = await textSessionRef.current.sendMessage({
+        message: `Translate the following statement into clinical English if it is in another language, or into Hindi/regional language if it is already in English: "${msg}"`
+      });
+      setTranscriptions(prev => [...prev, { role: 'ai', text: response.text }]);
+    } catch (err) {
+      setTranscriptions(prev => [...prev, { role: 'ai', text: "Translation failed. Please try again." }]);
+    } finally {
+      setIsTranslating(false);
+    }
+  };
 
   return (
     <div className="fixed inset-0 z-[3000] bg-slate-950/40 backdrop-blur-md flex items-center justify-center p-4 animate-in fade-in duration-300">
@@ -203,7 +228,7 @@ const MultilingualBridge: React.FC<MultilingualBridgeProps> = ({ onClose, partne
             <div className="flex flex-col items-center justify-center py-16 space-y-5 text-center">
               <div className="text-5xl">⚠️</div>
               <h3 className="text-[18px] font-bold text-slate-900">Voice Bridge Unavailable</h3>
-              <p className="text-[13px] font-medium text-slate-500 max-w-xs">The Real-time Voice Bridge requires an active Google Gemini API key. Currently using standard fallback services.</p>
+              <p className="text-[13px] font-medium text-slate-500 max-w-xs">The connection to the interpretation server could not be established.</p>
               <div className="flex gap-3">
                 <button onClick={() => window.location.reload()} className="px-6 py-2.5 bg-blue-600 text-white rounded-[12px] font-bold text-[13px] hover:bg-blue-700 transition-all">Retry</button>
                 <button onClick={onClose} className="px-6 py-2.5 bg-slate-100 text-slate-700 rounded-[12px] font-bold text-[13px] hover:bg-slate-200 transition-all">Close</button>
@@ -211,7 +236,7 @@ const MultilingualBridge: React.FC<MultilingualBridgeProps> = ({ onClose, partne
             </div>
           )}
 
-          {status === 'active' && transcriptions.map((t, i) => (
+          {(status === 'active' || status === 'text_fallback') && transcriptions.map((t, i) => (
             <div key={i} className={`flex ${t.role === 'user' ? 'justify-start' : 'justify-end'} animate-in slide-in-from-bottom-2`}>
               <div className={`max-w-[80%] p-4 rounded-[14px] shadow-sm ${t.role === 'user' ? 'bg-white border border-slate-100' : 'bg-blue-600 text-white'}`}>
                 <p className="text-[10px] font-bold uppercase tracking-wider mb-1.5 opacity-60">{t.role === 'user' ? 'Patient / User' : 'AI Interpreter'}</p>
@@ -230,19 +255,41 @@ const MultilingualBridge: React.FC<MultilingualBridgeProps> = ({ onClose, partne
           <div ref={transcriptEndRef} />
         </div>
 
+        {/* Text Fallback Input */}
+        {status === 'text_fallback' && (
+          <form onSubmit={handleTextTranslate} className="p-4 bg-slate-50 border-t border-slate-100 flex gap-3 shrink-0">
+            <input
+              type="text"
+              value={textInput}
+              onChange={(e) => setTextInput(e.target.value)}
+              placeholder="Type phrase to translate..."
+              disabled={isTranslating}
+              className="flex-1 px-4 py-3 rounded-[12px] text-[14px] font-medium border border-slate-200 focus:outline-none focus:border-blue-500 disabled:opacity-50"
+            />
+            <button
+              type="submit"
+              disabled={!textInput.trim() || isTranslating}
+              className="px-6 py-3 bg-blue-600 text-white rounded-[12px] font-bold text-[13px] hover:bg-blue-700 transition-all disabled:opacity-50 flex items-center justify-center min-w-[100px]"
+            >
+              {isTranslating ? '...' : 'Translate'}
+            </button>
+          </form>
+        )}
+
         {/* Footer */}
         <div className="p-5 bg-white border-t border-slate-100 flex items-center justify-between shrink-0">
           <div className="flex items-center space-x-4">
             <button
               onClick={() => setIsMuted(!isMuted)}
-              className={`w-12 h-12 rounded-[12px] flex items-center justify-center transition-all ${isMuted ? 'bg-rose-500 text-white shadow-lg shadow-rose-500/20' : 'bg-slate-50 text-slate-400 border border-slate-200 hover:bg-slate-100'}`}
+              disabled={status === 'text_fallback'}
+              className={`w-12 h-12 rounded-[12px] flex items-center justify-center transition-all ${isMuted || status === 'text_fallback' ? 'bg-rose-500 text-white shadow-lg shadow-rose-500/20' : 'bg-slate-50 text-slate-400 border border-slate-200 hover:bg-slate-100'} ${status === 'text_fallback' && 'opacity-50 cursor-not-allowed grayscale'}`}
             >
-              <span className="text-xl">{isMuted ? '🔇' : '🎤'}</span>
+              <span className="text-xl">{isMuted || status === 'text_fallback' ? '🔇' : '🎤'}</span>
             </button>
             <div>
               <p className="text-[13px] font-bold text-slate-900">Clinical Input</p>
-              <p className={`text-[11px] font-bold ${isMuted ? 'text-rose-500' : status === 'active' ? 'text-emerald-500' : 'text-slate-400'}`}>
-                {isMuted ? 'Microphone Muted' : status === 'active' ? 'Live Translation Active' : 'Connecting...'}
+              <p className={`text-[11px] font-bold ${isMuted || status === 'text_fallback' ? 'text-rose-500' : status === 'active' ? 'text-emerald-500' : 'text-slate-400'}`}>
+                {status === 'text_fallback' ? 'Voice Disabled (Text Mode)' : isMuted ? 'Microphone Muted' : status === 'active' ? 'Live Translation Active' : 'Connecting...'}
               </p>
             </div>
           </div>

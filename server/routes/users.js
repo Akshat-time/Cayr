@@ -20,8 +20,14 @@ const requireAuth = (req, res, next) => {
 // ── GET all users (admin/doctor use) ─────────────────────────────────────────
 router.get('/', async (req, res) => {
     try {
-        const { role } = req.query;
-        const filter = role ? { role } : {};
+        const { role, search } = req.query;
+        let filter = {};
+        if (role) {
+            filter.role = role;
+        }
+        if (search) {
+            filter.name = { $regex: search, $options: 'i' };
+        }
         const users = await User.find(filter).select('-password -profilePicture').lean();
 
         // Populate doctor profiles if needed

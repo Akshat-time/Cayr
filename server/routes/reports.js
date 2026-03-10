@@ -212,7 +212,19 @@ router.post('/', protect, async (req, res) => {
 // GET /patient — Patient views their own reports
 router.get('/patient', protect, requireRole('patient'), async (req, res) => {
     try {
-        const reports = await MedicalReport.find({ patientId: req.user.id })
+        const { search } = req.query;
+        let query = { patientId: req.user.id };
+
+        if (search) {
+            query.$or = [
+                { title: { $regex: search, $options: 'i' } },
+                { description: { $regex: search, $options: 'i' } },
+                { diagnosis: { $regex: search, $options: 'i' } },
+                { reportType: { $regex: search, $options: 'i' } }
+            ];
+        }
+
+        const reports = await MedicalReport.find(query)
             .populate('doctorId', 'name specialty')
             .sort({ createdAt: -1 });
         res.json(reports);
@@ -248,9 +260,19 @@ router.get('/doctor', protect, requireRole('doctor'), async (req, res) => {
 // GET / — General (used by App.tsx fetch for all reports, no auth for now)
 router.get('/', protect, async (req, res) => {
     try {
+        const { search } = req.query;
         let query = {};
         if (req.user.role === 'patient') query.patientId = req.user.id;
         else if (req.user.role === 'doctor') query.doctorId = req.user.id;
+
+        if (search) {
+            query.$or = [
+                { title: { $regex: search, $options: 'i' } },
+                { description: { $regex: search, $options: 'i' } },
+                { diagnosis: { $regex: search, $options: 'i' } },
+                { reportType: { $regex: search, $options: 'i' } }
+            ];
+        }
 
         const reports = await MedicalReport.find(query).sort({ createdAt: -1 });
         res.json(reports);
